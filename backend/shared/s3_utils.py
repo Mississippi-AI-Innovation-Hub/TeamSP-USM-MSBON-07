@@ -36,6 +36,13 @@ def save_extracted_data(transcript_id: str, data: dict) -> str:
     return key
 
 
+def get_json(key: str) -> dict:
+    """Fetch and parse any JSON file from the transcript bucket by key."""
+    bucket = get_bucket_name()
+    resp = _s3.get_object(Bucket=bucket, Key=key)
+    return json.loads(resp["Body"].read().decode("utf-8"))
+
+
 def get_extracted_data(transcript_id: str) -> dict:
     key = f"extracted/{transcript_id}.json"
     bucket = get_bucket_name()

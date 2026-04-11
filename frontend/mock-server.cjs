@@ -115,8 +115,8 @@ verifications.set(t2Id, [{
   aiAnalysis: {
     summary: 'This LPN transcript from Mississippi Delta Community College raises several concerns. While the institution itself is approved and accredited, the program was completed in an unusually short timeframe (2 semesters vs. typical 3-4). Additionally, a required mental health nursing course appears to be missing, and there are 24 transfer credits from "National Health Academy" which is not a recognized institution. These factors combined warrant human review.',
     additionalFlags: [
-      'Transfer institution "National Health Academy" not found in any recognized accreditation database',
-      'High ratio of transfer credits (24) to direct coursework (24) is unusual for LPN programs',
+      { issue: 'Unrecognized transfer institution', details: '"National Health Academy" not found in any recognized accreditation database.', severity: 'HIGH' },
+      { issue: 'High transfer credit ratio', details: '24 transfer credits vs 24 direct credits is unusual for LPN programs.', severity: 'MEDIUM' },
     ],
     recommendation: 'REVIEW - Multiple flags detected that require human verification before proceeding.',
     reasoning: 'Three deterministic rules flagged issues: missing required course, compressed timeline, and questionable transfer credits. The combination of these flags, particularly the unrecognized transfer institution, elevates the risk level. While each flag individually might have a reasonable explanation, the pattern warrants careful review by MSBON staff.',
@@ -163,10 +163,10 @@ verifications.set(t3Id, [{
   aiAnalysis: {
     summary: 'This transcript exhibits multiple serious red flags consistent with known fraud patterns. The institution "Southern Regional Technical College" cannot be verified as an accredited nursing school. The BSN program was purportedly completed in only 3 semesters, which is impossible for a legitimate 4-year program. Credit hours fall significantly short of BSN requirements, there are missing core courses, a failing grade in a required course, and a large GPA discrepancy. The pattern of 62 transfer credits from unverified institutions combined with the compressed timeline closely matches characteristics identified in Operation Nightingale-style fraud schemes.',
     additionalFlags: [
-      'Institution name does not match any known accredited nursing program in NCSBN or US DOE databases',
-      'Transcript formatting inconsistencies: multiple font styles suggest possible document manipulation',
-      'Course numbering system does not follow standard conventions for the claimed institution type',
-      'Pattern matches known fraudulent transcript characteristics from Operation Nightingale alerts',
+      { issue: 'Institution not in any accreditation database', details: '"Southern Regional Technical College" does not appear in NCSBN or US DOE records for nursing programs.', severity: 'HIGH' },
+      { issue: 'Document formatting inconsistencies', details: 'Multiple font styles detected in the transcript — may indicate document manipulation.', severity: 'HIGH' },
+      { issue: 'Non-standard course numbering', details: 'Course numbering system does not follow conventions expected for the claimed institution type.', severity: 'MEDIUM' },
+      { issue: 'Pattern matches Operation Nightingale fraud indicators', details: 'Combination of compressed timeline, high transfer credits, and unverified institution matches known fraud patterns from federal nursing credential investigations.', severity: 'HIGH' },
     ],
     recommendation: 'REJECT - This transcript exhibits multiple characteristics consistent with fraudulent credentials. Recommend referral for investigation.',
     reasoning: 'Ten out of 13 verification rules flagged issues. The combination of unrecognized institution, impossible timeline, massive GPA discrepancy, duplicate courses, and high transfer credit volume from unverified sources creates a pattern highly indicative of fraud. No legitimate explanation could account for all these anomalies simultaneously. This transcript should be flagged for MSBON enforcement review.',
@@ -316,7 +316,7 @@ app.get('/transcripts', (_req, res) => {
   const list = Array.from(transcripts.values()).sort(
     (a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
   );
-  res.json(list);
+  res.json({ transcripts: list });
 });
 
 app.get('/transcripts/:id', (req, res) => {
@@ -469,7 +469,10 @@ app.get('/reviews/:transcriptId', (req, res) => {
 
 // -- Audit --
 app.get('/audit/:transcriptId', (req, res) => {
-  res.json(auditEntries.get(req.params.transcriptId) || []);
+  res.json({
+    transcriptId: req.params.transcriptId,
+    auditLog: auditEntries.get(req.params.transcriptId) || [],
+  });
 });
 
 // ---------------------------------------------------------------------------

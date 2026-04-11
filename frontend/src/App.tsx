@@ -19,10 +19,10 @@ function App() {
       <header className="bg-msbon-800 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
+            <Link to="/" className="hover:opacity-80 transition-opacity">
               <h1 className="text-xl font-bold">MSBON Transcript Verification</h1>
               <p className="text-sm text-blue-200">Mississippi State Board of Nursing</p>
-            </div>
+            </Link>
             <nav className="flex gap-4">
               {navItems.map((item) => (
                 <Link

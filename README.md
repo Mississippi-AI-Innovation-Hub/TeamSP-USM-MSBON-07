@@ -1,10 +1,38 @@
-# MSBON Transcript Verification POC
+# MSBON Transcript Verification
 
-AI-assisted transcript verification system for the **Mississippi State Board of Nursing (MSBN)**. Built as a proof-of-concept for the MS AI Innovation Hub.
+> Mississippi AI Innovation Hub — Proof of Concept
 
-This system helps MSBN staff verify nursing school transcripts for licensure applicants by combining deterministic rule-based checks with AI-powered analysis to detect fraud, verify program completion, and flag anomalies — while keeping humans in the loop for all decisions.
+## Overview
 
-## Architecture
+This repository contains the code and documentation for a Mississippi AI Innovation Hub Proof of Concept focused on nursing transcript verification. The PoC was developed to explore whether AI-assisted document processing could help the Mississippi State Board of Nursing (MSBN) by standardizing transcript review, detecting fraud indicators, and surfacing anomalies — while keeping staff in the loop for every decision.
+
+The project demonstrates feasibility within a limited prototype environment and is not a production-ready solution.
+
+## Agency Problem
+
+MSBN is legally responsible for verifying that nursing school transcripts submitted for licensure meet Mississippi's academic requirements. This review is currently manual, inconsistent across reviewers, and vulnerable to fraudulent credentials — an ongoing national concern highlighted by federal investigations such as Operation Nightingale, which uncovered fraudulent nursing credentials at scale.
+
+The PoC explores how AI can **augment** — not replace — staff review by:
+- Standardizing what gets checked on every transcript
+- Flagging anomalies and fraud indicators automatically
+- Producing auditable, explainable outputs for every decision
+
+## PoC Scope and Demonstrated Capabilities
+
+This PoC covers:
+- PDF transcript upload and secure storage
+- OCR text extraction via Amazon Textract
+- Structured data extraction (courses, grades, GPA, dates) via Amazon Bedrock Nova Lite
+- 13 deterministic verification rules across graduation, program completion, accreditation, and fraud indicators
+- Holistic AI analysis via Amazon Bedrock Nova Pro
+- Human review and annotation workflow
+- Immutable audit trail for every action
+
+**Applicant types in scope:** First-time licensure applicants and endorsement applicants.
+
+**Out of scope:** Automated licensing decisions, real applicant data, integration with external systems (NURSYS, NCSBN, schools), international transcripts, predictive risk scoring, or any replacement of human judgment.
+
+## Architecture Overview
 
 ```
 ┌─────────────────────────────────┐
@@ -29,58 +57,34 @@ Textract    Bedrock     Bedrock
 (extract)
 ```
 
-**Key principle:** Advisory outputs only. The system never approves or denies — it surfaces findings for human review.
+**Key principle:** Advisory outputs only. The system never approves or denies a license — it surfaces findings for human review.
 
-## How It Works
+See [docs/architecture.md](docs/architecture.md) for a full description of each component.
 
-1. **Upload** — Staff uploads a transcript PDF
-2. **Extract** — Amazon Textract + Bedrock Nova Lite parse the PDF into structured data (courses, grades, dates, GPA)
-3. **Verify** — Two-layer verification:
-   - **13 deterministic rules** check graduation, program hours, required courses, accreditation, and fraud indicators
-   - **Bedrock Nova Pro** performs holistic AI analysis for patterns rules can't catch
-4. **Report** — Findings are compiled into a structured report
-5. **Review** — Staff reviews flags, confirms or overrides findings, adds notes
-6. **Audit** — Every action is logged to an immutable audit trail
-
-### Verification Rules
-
-| Category | Rules |
-|----------|-------|
-| **Graduation** | Degree conferral confirmed, graduation date present |
-| **Program Completion** | Credit hours met, required courses present, passing grades, clinical hours |
-| **Accreditation** | School on approved list, valid accreditation type (ACEN/CCNE) |
-| **Fraud Indicators** | Compressed timeline, enrollment gaps, excessive transfers, GPA mismatch, duplicate courses |
-
-### Safety Override
-
-If the AI recommends APPROVE but 3+ rules are flagged, the system automatically escalates to REVIEW_REQUIRED. The AI never gets the final say.
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 18, TypeScript, Vite, TailwindCSS |
-| **API** | API Gateway (HTTP API) |
-| **Compute** | AWS Lambda (Python 3.11) |
-| **Workflow** | AWS Step Functions (Express) |
-| **AI/ML** | Amazon Bedrock (Nova Lite, Nova Pro), Amazon Textract |
-| **Storage** | S3 (transcripts), DynamoDB (metadata, verifications, reviews, audit) |
-| **Infrastructure** | AWS CDK (Python) |
-| **Hosting** | S3 + CloudFront |
-
-## Project Structure
+## Repository Structure
 
 ```
 MSBON/
+├── README.md
+├── LICENSE
+├── .gitignore
+├── .env.example
+├── CHANGELOG.md
+├── docs/
+│   ├── architecture.md      # Component descriptions and data flow
+│   ├── setup.md             # Step-by-step deployment guide
+│   ├── testing.md           # Validation steps and test scenarios
+│   ├── data-notes.md        # Data used, excluded, and governance notes
+│   └── limitations.md       # What the PoC does not do
 ├── backend/
 │   ├── lambdas/
-│   │   ├── upload/          # Transcript upload + presigned URLs
-│   │   ├── extract/         # Textract + Nova Lite extraction
-│   │   ├── verify/          # Rules engine + Nova Pro analysis
-│   │   ├── report/          # Report generation
+│   │   ├── upload/          # Transcript upload + presigned URL generation
+│   │   ├── extract/         # Textract OCR + Nova Lite structured extraction
+│   │   ├── verify/          # Rules engine + Nova Pro AI analysis
+│   │   ├── report/          # Verification report generation
 │   │   ├── review/          # Human review actions
 │   │   └── audit/           # Audit trail queries
-│   ├── shared/              # Lambda layer (models, DB, S3, Bedrock helpers)
+│   ├── shared/              # Lambda layer: models, DB, S3, Bedrock helpers
 │   └── rules/               # Verification data (approved schools, requirements)
 ├── frontend/
 │   ├── src/
@@ -88,85 +92,86 @@ MSBON/
 │   │   ├── components/      # FlagCard, StatusBadge, RuleExplanation, TranscriptViewer
 │   │   ├── services/        # API client
 │   │   └── types/           # TypeScript interfaces
-│   └── mock-server.cjs      # Mock API for local development
-└── infrastructure/
-    └── stacks/              # CDK stacks (storage, API, verification, frontend)
+│   └── mock-server.cjs      # Local development mock API
+├── infrastructure/
+│   └── stacks/              # CDK stacks: storage, verification pipeline, API, frontend
+└── tests/                   # Test suite
 ```
 
-## Local Development
+## Setup
 
-Run the frontend locally with mock data (no AWS required):
+See [docs/setup.md](docs/setup.md) for full deployment instructions.
+
+**Quick start (local development, no AWS required):**
 
 ```bash
-# Install dependencies
 cd frontend
 npm install
-
-# Option 1: Run both servers at once
-npm run dev:full
-
-# Option 2: Run separately
-npm run mock-api    # Terminal 1 — Mock API on :3001
-npm run dev         # Terminal 2 — Frontend on :3000
+npm run dev:full        # Starts mock API on :3001 and frontend on :3000
 ```
 
-Open **http://localhost:3000** to see the dashboard with 5 sample transcripts covering different scenarios:
-- Clean transcript (all rules pass, LOW risk)
-- Moderate flags (missing course, compressed timeline, MEDIUM risk)
-- High-risk fraud indicators (unrecognized school, GPA mismatch, HIGH risk)
-- Approved transcript (reviewed by staff)
-- In-progress extraction
+Open **http://localhost:3000** — the dashboard loads with 5 sample transcripts covering clean, flagged, high-risk, approved, and in-progress scenarios.
 
-## AWS Deployment
-
-### Prerequisites
-
-- AWS CLI configured with credentials (`aws configure`)
-- AWS CDK CLI installed (`npm install -g aws-cdk`)
+**AWS deployment prerequisites:**
+- AWS CLI configured with appropriate credentials
+- AWS CDK CLI (`npm install -g aws-cdk`)
 - Python 3.11+
-- Bedrock model access enabled for Nova Lite and Nova Pro in us-east-1
+- Amazon Bedrock Nova Lite and Nova Pro enabled in `us-east-1`
+- Amazon Textract access enabled in `us-east-1`
 
-### Deploy
+## Configuration
 
-```bash
-cd infrastructure
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# First time only
-cdk bootstrap
-
-# Deploy all stacks
-cdk deploy --all
-```
-
-### Deploy Frontend
+Copy `.env.example` to `.env.local` and fill in the values after deploying the CDK stacks:
 
 ```bash
-cd frontend
-npm run build
-aws s3 sync dist/ s3://<frontend-bucket-from-cdk-output>
+cp .env.example .env.local
 ```
 
-### Estimated Cost
+Key variable:
+```
+VITE_API_URL=https://<your-api-id>.execute-api.us-east-1.amazonaws.com
+```
 
-| Service | Estimated Monthly Cost |
-|---------|----------------------|
-| Lambda, API Gateway, Step Functions | ~$5-10 |
-| DynamoDB (on-demand) | ~$2-5 |
-| S3 + CloudFront | ~$2-3 |
-| Textract | ~$1.50/1000 pages |
-| Bedrock (Nova Lite + Pro) | ~$5-20 (usage dependent) |
-| **Total** | **~$20-50 for POC usage** |
+All Lambda environment variables (DynamoDB table names, S3 bucket, Step Functions ARN) are injected automatically by CDK at deploy time.
 
-## Data Governance
+## Data Notes
 
-- All test data is anonymized — no real PII or citizen data
-- Transcripts used for development are de-identified
-- System produces advisory outputs only; no automated approvals
-- Full audit trail for every action
+See [docs/data-notes.md](docs/data-notes.md) for full details.
+
+This repository does not include real applicant data. Any data used during development was anonymized or synthetic. Test transcripts are not included in this public repository.
+
+## Usage
+
+1. Upload a transcript PDF via the **Upload** page
+2. The pipeline runs automatically: Textract OCR → Nova Lite extraction → 13-rule engine → Nova Pro AI analysis
+3. View flagged items, AI analysis summary, and rule-by-rule results on the **Verification Detail** page
+4. Staff review and annotate findings via the **Review** page
+5. All actions are recorded in the **Audit Log**
+
+## Testing and Evaluation
+
+See [docs/testing.md](docs/testing.md) for step-by-step validation instructions.
+
+Key scenarios to test:
+- Upload a multi-page nursing transcript PDF → verify extraction and rule results appear
+- Check that a transcript with missing required courses is flagged
+- Confirm that the audit log records all actions
+- Verify the "Start Review" flow saves a human decision with a timestamp
+
+## Limitations
+
+See [docs/limitations.md](docs/limitations.md) for a full list.
+
+This PoC was developed within a limited timeline and controlled environment. It contains simplified workflows, prototype UI, and is not validated for production use. Key limitations include no real applicant data integration, no external system connections, and no production security hardening.
+
+## Disclaimer
+
+This repository contains code and supporting materials developed as part of a Mississippi Artificial Intelligence Innovation Hub Proof of Concept project. The contents are provided for prototype demonstration purposes. They are not production ready by default and may include simplified workflows, incomplete security guardrails, placeholder integrations, or reduced controls appropriate only for a Proof-of-Concept environment.
 
 ## License
 
-This project is open source, built for the MS AI Innovation Hub.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+## Contributors
+
+Developed by the Mississippi AI Innovation Hub in partnership with the Mississippi State Board of Nursing (MSBN), Mississippi ITS, and MAIN.

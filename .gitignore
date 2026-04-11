@@ -1,11 +1,16 @@
-# Project reference documents (not for public repo)
-MS Innovation Hub Onboarding and Best Practices Guide v1.1 1.pdf
-MSBON anonymized transcripts.pdf
-MSBON Fraud-Sensitive Transcript Verification Scope.docx
+# Internal dev context (not for public repo)
 CLAUDE.md
-
-# Plan files
 .claude/
+
+# Reference documents and test data folder (PDFs, DOCXs, fraud cases — never publish)
+reference files/
+
+# Deployment helpers (contain account-specific config — not for public repo)
+DEPLOYMENT.md
+deploy.sh
+
+# CDK deployment outputs (contain live account IDs and URLs)
+cdk-outputs*.json
 
 # Python
 __pycache__/

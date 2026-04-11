@@ -30,18 +30,22 @@ def _response(status_code: int, body: dict) -> dict:
     }
 
 
-def _start_step_functions(transcript_id: str) -> str:
+def _start_step_functions(transcript_id: str, s3_key: str) -> str:
     """Start the verification state machine for a transcript."""
     execution = sfn_client.start_execution(
         stateMachineArn=os.environ["STATE_MACHINE_ARN"],
         name=f"verify-{transcript_id}-{uuid.uuid4().hex[:8]}",
-        input=json.dumps({"transcriptId": transcript_id}),
+        input=json.dumps({"transcriptId": transcript_id, "s3Key": s3_key}),
     )
     return execution["executionArn"]
 
 
 def _handle_post_transcript(body: dict) -> dict:
-    """Generate a presigned upload URL, create transcript record, start Step Functions."""
+    """Generate a presigned upload URL and create transcript record.
+
+    Step Functions pipeline is started separately via POST /transcripts/{id}/verify
+    after the client finishes uploading the file to S3 via the presigned URL.
+    """
     applicant_id = body.get("applicantId", "")
     file_name = body.get("fileName", "transcript.pdf")
     school_name = body.get("schoolName", "")
@@ -62,9 +66,6 @@ def _handle_post_transcript(body: dict) -> dict:
     # Persist transcript record
     db.put_transcript(record.to_dynamo())
 
-    # Start the verification pipeline
-    execution_arn = _start_step_functions(record.transcript_id)
-
     # Log audit entry
     audit = AuditEntry(
         transcript_id=record.transcript_id,
@@ -73,7 +74,6 @@ def _handle_post_transcript(body: dict) -> dict:
         details={
             "fileName": file_name,
             "applicantId": applicant_id,
-            "executionArn": execution_arn,
         },
     )
     db.put_audit_entry(audit.to_dynamo())
@@ -106,7 +106,7 @@ def _handle_verify_transcript(transcript_id: str) -> dict:
     if not item:
         return _response(404, {"error": "Transcript not found"})
 
-    execution_arn = _start_step_functions(transcript_id)
+    execution_arn = _start_step_functions(transcript_id, item["s3Key"])
 
     audit = AuditEntry(
         transcript_id=transcript_id,

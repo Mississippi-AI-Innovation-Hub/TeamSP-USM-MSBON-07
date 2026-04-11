@@ -51,10 +51,14 @@ def invoke_nova_json(
     max_tokens: int = 4096,
     temperature: float = 0.1,
 ) -> dict:
-    """Invoke Nova and parse the response as JSON."""
+    """Invoke Nova and parse the response as JSON.
+
+    If the model output is truncated (unterminated JSON), attempts to recover
+    by closing any open braces/brackets before parsing.
+    """
     text = invoke_nova(prompt, system_prompt, model_id, max_tokens, temperature)
 
-    # Try to extract JSON from the response
+    # Strip markdown code fences if present
     text = text.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -64,4 +68,41 @@ def invoke_nova_json(
         text = text[:-3]
     text = text.strip()
 
-    return json.loads(text)
+    # First try clean parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Attempt recovery: truncate at the last complete top-level field boundary
+    # and close any open braces/brackets so we get partial data rather than an error.
+    depth = 0
+    in_string = False
+    escape_next = False
+    last_safe = 0
+    for i, ch in enumerate(text):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+            if depth == 0:
+                last_safe = i + 1
+
+    # Close unclosed braces
+    truncated = text[:last_safe] if last_safe > 0 else text
+    open_braces = truncated.count("{") - truncated.count("}")
+    open_brackets = truncated.count("[") - truncated.count("]")
+    truncated += "]" * open_brackets + "}" * open_braces
+
+    return json.loads(truncated)

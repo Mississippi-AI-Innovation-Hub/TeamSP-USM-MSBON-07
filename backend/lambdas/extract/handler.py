@@ -88,31 +88,62 @@ Transcript text:
 {raw_text}"""
 
 
-def _extract_text_with_textract(pdf_bytes: bytes) -> str:
-    """Use Amazon Textract synchronous API to extract text from PDF bytes.
+def _extract_text_with_textract(pdf_bytes: bytes, s3_key: str) -> tuple[str, int]:
+    """Extract text from a PDF using Textract async API via S3 reference.
 
-    The synchronous detect_document_text API supports documents up to 5MB
-    and handles single and multi-page PDFs passed as raw bytes.
+    Uses start_document_text_detection (async) so multi-page PDFs and
+    documents over 5MB are fully supported. Polls until the job completes
+    or the Lambda timeout approaches.
     """
-    response = _textract.detect_document_text(
-        Document={"Bytes": pdf_bytes}
+    import time
+
+    bucket = s3_utils.get_bucket_name()
+
+    # Start async job referencing the file already in S3
+    response = _textract.start_document_text_detection(
+        DocumentLocation={"S3Object": {"Bucket": bucket, "Name": s3_key}}
     )
+    job_id = response["JobId"]
+    logger.info("Textract job started: %s", job_id)
 
-    lines = []
-    for block in response.get("Blocks", []):
-        if block["BlockType"] == "LINE":
-            lines.append(block["Text"])
+    # Poll until complete (max 240s, staying within the 300s Lambda timeout)
+    deadline = time.time() + 240
+    while time.time() < deadline:
+        result = _textract.get_document_text_detection(JobId=job_id)
+        status = result["JobStatus"]
+        if status == "SUCCEEDED":
+            break
+        if status == "FAILED":
+            raise RuntimeError(f"Textract job failed: {result.get('StatusMessage', 'unknown')}")
+        time.sleep(5)
+    else:
+        raise TimeoutError("Textract job did not complete within 240 seconds")
 
-    page_count = 0
-    for block in response.get("Blocks", []):
-        if block["BlockType"] == "PAGE":
-            page_count += 1
+    # Collect all pages (Textract paginates results)
+    blocks = list(result.get("Blocks", []))
+    next_token = result.get("NextToken")
+    while next_token:
+        page_result = _textract.get_document_text_detection(JobId=job_id, NextToken=next_token)
+        blocks.extend(page_result.get("Blocks", []))
+        next_token = page_result.get("NextToken")
+
+    lines = [b["Text"] for b in blocks if b["BlockType"] == "LINE"]
+    page_count = sum(1 for b in blocks if b["BlockType"] == "PAGE")
 
     return "\n".join(lines), max(page_count, 1)
 
 
 def _parse_with_bedrock(raw_text: str) -> dict:
-    """Send raw transcript text to Nova Lite for structured extraction."""
+    """Send raw transcript text to Nova Lite for structured extraction.
+
+    Input is capped at 12,000 characters to ensure the model has enough
+    output token budget to complete the JSON response.
+    """
+    # Nova Lite output limit is ~5K tokens; keep input small so JSON output fits cleanly
+    MAX_INPUT_CHARS = 6_000
+    if len(raw_text) > MAX_INPUT_CHARS:
+        raw_text = raw_text[:MAX_INPUT_CHARS] + "\n[... truncated for extraction ...]"
+
     schema_str = json.dumps(EXTRACTION_SCHEMA, indent=2)
     prompt = USER_PROMPT_TEMPLATE.format(schema=schema_str, raw_text=raw_text)
 
@@ -120,7 +151,7 @@ def _parse_with_bedrock(raw_text: str) -> dict:
         prompt=prompt,
         system_prompt=SYSTEM_PROMPT,
         model_id=NOVA_LITE,
-        max_tokens=8192,
+        max_tokens=5000,
         temperature=0.0,
     )
 
@@ -151,14 +182,9 @@ def handler(event, context):
         # Update status to EXTRACTING
         db.update_transcript_status(transcript_id, "EXTRACTING")
 
-        # Step 1: Download PDF from S3
-        logger.info("Downloading PDF from S3: %s", s3_key)
-        pdf_bytes = s3_utils.get_pdf_bytes(s3_key)
-        logger.info("Downloaded PDF, size: %d bytes", len(pdf_bytes))
-
-        # Step 2: Extract raw text via Textract
-        logger.info("Running Textract OCR")
-        raw_text, page_count = _extract_text_with_textract(pdf_bytes)
+        # Step 1: Extract raw text via Textract (reads directly from S3)
+        logger.info("Running Textract async OCR on s3_key: %s", s3_key)
+        raw_text, page_count = _extract_text_with_textract(None, s3_key)
         logger.info("Textract extracted %d characters across %d page(s)", len(raw_text), page_count)
 
         if not raw_text.strip():

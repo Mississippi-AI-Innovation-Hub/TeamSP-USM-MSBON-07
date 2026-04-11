@@ -11,7 +11,7 @@ export default function VerificationDetail() {
   const { id } = useParams<{ id: string }>();
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [verification, setVerification] = useState<Verification | null>(null);
-  const [_extractedData, setExtractedData] = useState<ExtractedTranscript | null>(null);
+  const [_extractedData] = useState<ExtractedTranscript | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -94,9 +94,15 @@ export default function VerificationDetail() {
               {verification.aiAnalysis.additionalFlags.length > 0 && (
                 <div className="mt-3">
                   <p className="text-xs font-medium text-gray-500 uppercase mb-1">Additional Flags</p>
-                  <ul className="list-disc list-inside text-sm text-red-700">
+                  <ul className="space-y-2 mt-1">
                     {verification.aiAnalysis.additionalFlags.map((flag, i) => (
-                      <li key={i}>{flag}</li>
+                      <li key={i} className="text-sm border border-red-200 rounded p-2 bg-red-50">
+                        <span className="font-medium text-red-700">[{flag.severity}]</span>{' '}
+                        <span className="text-gray-800">{flag.issue}</span>
+                        {flag.details && (
+                          <p className="text-xs text-gray-500 mt-1">{flag.details}</p>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>

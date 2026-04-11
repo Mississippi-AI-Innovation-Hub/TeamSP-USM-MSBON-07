@@ -16,23 +16,29 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   // Transcripts
-  listTranscripts: () => request<Transcript[]>('/transcripts'),
+  listTranscripts: () =>
+    request<{ transcripts: Transcript[] }>('/transcripts').then((r) => r.transcripts),
 
   getTranscript: (id: string) => request<Transcript>(`/transcripts/${id}`),
 
-  uploadTranscript: (file: File) => {
-    return request<{ transcriptId: string; uploadUrl: string }>('/transcripts', {
+  uploadTranscript: async (file: File) => {
+    // Step 1: create transcript record and get presigned S3 URL
+    const data = await request<{ transcriptId: string; uploadUrl: string }>('/transcripts', {
       method: 'POST',
       body: JSON.stringify({ fileName: file.name, contentType: file.type }),
-    }).then(async (data) => {
-      // Upload file to S3 using presigned URL
-      await fetch(data.uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
-      });
-      return data;
     });
+
+    // Step 2: upload file directly to S3 (file must land before pipeline starts)
+    await fetch(data.uploadUrl, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type },
+    });
+
+    // Step 3: now that the file is in S3, start the verification pipeline
+    await request(`/transcripts/${data.transcriptId}/verify`, { method: 'POST' });
+
+    return data;
   },
 
   triggerVerification: (transcriptId: string) =>
@@ -56,5 +62,6 @@ export const api = {
 
   // Audit
   getAuditLog: (transcriptId: string) =>
-    request<AuditEntry[]>(`/audit/${transcriptId}`),
+    request<{ transcriptId: string; auditLog: AuditEntry[] }>(`/audit/${transcriptId}`)
+      .then((r) => r.auditLog),
 };

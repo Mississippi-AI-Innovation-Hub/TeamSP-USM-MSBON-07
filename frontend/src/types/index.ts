@@ -29,9 +29,15 @@ export interface RuleResult {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
+export interface AiFlag {
+  issue: string;
+  details: string;
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
 export interface AiAnalysis {
   summary: string;
-  additionalFlags: string[];
+  additionalFlags: AiFlag[];
   recommendation: string;
   reasoning: string;
 }

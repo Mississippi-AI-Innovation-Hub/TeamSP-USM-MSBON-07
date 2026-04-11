@@ -1,6 +1,7 @@
 from aws_cdk import (
     Stack,
     Duration,
+    CfnOutput,
     aws_lambda as _lambda,
     aws_apigatewayv2 as apigwv2,
     aws_iam as iam,
@@ -172,42 +173,47 @@ class ApiStack(Stack):
             ),
         )
 
+        # Use payload format 1.0 so handlers can read httpMethod/path (REST-style fields)
+        v1 = apigwv2.PayloadFormatVersion.VERSION_1_0
+
         # Routes
         self.api.add_routes(
             path="/transcripts",
             methods=[apigwv2.HttpMethod.POST, apigwv2.HttpMethod.GET],
-            integration=HttpLambdaIntegration("UploadIntegration", upload_fn),
+            integration=HttpLambdaIntegration("UploadIntegration", upload_fn, payload_format_version=v1),
         )
         self.api.add_routes(
             path="/transcripts/{transcriptId}",
             methods=[apigwv2.HttpMethod.GET],
-            integration=HttpLambdaIntegration("GetTranscriptIntegration", upload_fn),
+            integration=HttpLambdaIntegration("GetTranscriptIntegration", upload_fn, payload_format_version=v1),
         )
         self.api.add_routes(
             path="/transcripts/{transcriptId}/verify",
             methods=[apigwv2.HttpMethod.POST],
-            integration=HttpLambdaIntegration("VerifyIntegration", upload_fn),
+            integration=HttpLambdaIntegration("VerifyIntegration", upload_fn, payload_format_version=v1),
         )
         self.api.add_routes(
             path="/verifications/{transcriptId}",
             methods=[apigwv2.HttpMethod.GET],
-            integration=HttpLambdaIntegration("GetVerificationIntegration", verify_fn),
+            integration=HttpLambdaIntegration("GetVerificationIntegration", verify_fn, payload_format_version=v1),
         )
         self.api.add_routes(
             path="/reviews",
             methods=[apigwv2.HttpMethod.POST],
-            integration=HttpLambdaIntegration("CreateReviewIntegration", review_fn),
+            integration=HttpLambdaIntegration("CreateReviewIntegration", review_fn, payload_format_version=v1),
         )
         self.api.add_routes(
             path="/reviews/{transcriptId}",
             methods=[apigwv2.HttpMethod.GET],
-            integration=HttpLambdaIntegration("GetReviewsIntegration", review_fn),
+            integration=HttpLambdaIntegration("GetReviewsIntegration", review_fn, payload_format_version=v1),
         )
         self.api.add_routes(
             path="/audit/{transcriptId}",
             methods=[apigwv2.HttpMethod.GET],
-            integration=HttpLambdaIntegration("GetAuditIntegration", audit_fn),
+            integration=HttpLambdaIntegration("GetAuditIntegration", audit_fn, payload_format_version=v1),
         )
+
+        CfnOutput(self, "ApiUrl", value=self.api.url or "", description="API Gateway HTTP URL")
 
         # Store references for other stacks
         self.extract_fn = extract_fn

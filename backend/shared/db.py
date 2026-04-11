@@ -1,6 +1,9 @@
 """DynamoDB helper utilities."""
 
+import json
 import os
+from decimal import Decimal
+
 import boto3
 from boto3.dynamodb.conditions import Key
 
@@ -10,6 +13,11 @@ _dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
 
 def _table(name_env_var: str):
     return _dynamodb.Table(os.environ[name_env_var])
+
+
+def _floats_to_decimal(obj):
+    """Recursively convert floats to Decimal for DynamoDB compatibility."""
+    return json.loads(json.dumps(obj), parse_float=Decimal)
 
 
 def put_transcript(item: dict) -> None:
@@ -42,7 +50,7 @@ def list_transcripts() -> list[dict]:
 
 
 def put_verification(item: dict) -> None:
-    _table("VERIFICATIONS_TABLE").put_item(Item=item)
+    _table("VERIFICATIONS_TABLE").put_item(Item=_floats_to_decimal(item))
 
 
 def get_verifications_for_transcript(transcript_id: str) -> list[dict]:
