@@ -1,7 +1,8 @@
 """Lambda handler for extracting structured data from nursing school transcript PDFs.
 
 Part of the MSBON Fraud-Sensitive Transcript Verification system.
-Uses Amazon Textract for OCR and Amazon Bedrock (Nova Lite) for structured parsing.
+Uses Amazon Textract (with TABLES feature) for OCR and Amazon Bedrock Nova Pro
+for high-accuracy structured extraction.
 """
 
 import json
@@ -16,7 +17,7 @@ sys.path.insert(0, "/opt")
 from models import AuditEntry
 import db
 import s3_utils
-from bedrock_client import invoke_nova_json, NOVA_LITE
+from bedrock_client import invoke_nova_json, NOVA_PRO
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -24,92 +25,160 @@ logger.setLevel(logging.INFO)
 _textract = boto3.client("textract", region_name="us-east-1")
 
 EXTRACTION_SCHEMA = {
-    "student_id": "string",
-    "institutions": ["list of institution names"],
-    "program_name": "string",
-    "program_type": "one of: ADN, BSN, MSN, LPN",
+    "student_id": "string or empty string if redacted",
+    "institutions": ["list of all institution names found on the transcript"],
+    "document_issued_to": "who the transcript was officially issued to, e.g. 'Mississippi Board of Nursing' — extract verbatim if present, else empty string",
+    "program_name": "full program name as written on transcript",
+    "program_type": "one of: LPN, ADN, BSN, MSN, DNP — use best match based on program name and credential",
+    "credential_type": "the awarded credential, e.g. 'Career Certificate', 'Associate of Applied Science', 'Bachelor of Science in Nursing', 'Diploma'",
+    "enrollment_start": "the earliest term or date the student enrolled, e.g. 'Fall 2018' or '2018-08-01'",
     "courses": [
         {
-            "name": "string",
-            "number": "string",
-            "credits": "number",
-            "grade": "string",
-            "term": "string",
+            "name": "course title as written",
+            "number": "course code/number, e.g. PNV 1115",
+            "credits": "numeric credit hours",
+            "grade": "grade as written including any suffix like (R) for repeated",
+            "term": "the specific term this course was taken — be precise, do not guess",
+            "repeated": "true if course is marked as repeated/retake (R suffix or explicit retake notation), else false",
         }
     ],
     "transfer_credits": [
         {
-            "institution": "string",
+            "institution": "sending institution name",
             "courses": [
                 {
-                    "name": "string",
-                    "number": "string",
-                    "credits": "number",
-                    "grade": "string",
+                    "name": "course title",
+                    "number": "course code",
+                    "credits": "numeric credits",
+                    "grade": "grade as written",
                 }
             ],
         }
     ],
-    "degree_conferral": "string or null",
-    "graduation_date": "string (YYYY-MM-DD) or null",
-    "graduation_confirmed": "boolean",
+    "academic_standing_per_term": [
+        {
+            "term": "term name",
+            "standing": "academic standing exactly as written, e.g. 'Good Standing', 'Scholastic Probation', 'President's List', 'Academic Suspension'",
+        }
+    ],
+    "degree_conferral": "the degree/credential conferral statement as written, or null",
+    "graduation_date": "completion or graduation date in YYYY-MM-DD format, or null",
+    "graduation_confirmed": "true only if transcript explicitly states degree was conferred, awarded, or program was completed",
     "gpa_info": {
-        "cumulative": "number or null",
-        "program": "number or null",
-        "by_term": [{"term": "string", "gpa": "number"}],
+        "cumulative": "cumulative GPA as a number, or null",
+        "program": "program-specific GPA if different from cumulative, or null",
+        "by_term": [{"term": "term name", "gpa": "numeric GPA for that term"}],
     },
-    "total_credit_hours": "number",
-    "enrollment_terms": ["list of term strings, e.g. 'Fall 2023'"],
+    "total_credit_hours": "total attempted credit hours as a number",
+    "earned_credit_hours": "total earned/completed credit hours (may differ from attempted if courses were failed or withdrawn)",
+    "enrollment_terms": ["list of all term strings in chronological order, e.g. 'Fall 2018', 'Spring 2019'"],
 }
 
 SYSTEM_PROMPT = (
-    "You are a data extraction assistant for a nursing board transcript verification system. "
-    "Your job is to parse raw OCR text from nursing school transcripts and return structured JSON. "
-    "Be precise and faithful to the source text. Do not invent data that is not present. "
-    "If a field cannot be determined from the text, use null for optional fields or empty "
-    "lists/strings for required fields. Return ONLY valid JSON, no commentary."
+    "You are a forensic data extraction specialist for a nursing board transcript verification system. "
+    "Your job is to parse OCR text from official nursing school transcripts and return accurate structured JSON. "
+    "Accuracy is critical — this data will be used to verify credentials and detect fraud. "
+    "Rules: (1) Be precise and faithful to the source text. (2) Never invent or infer data not present. "
+    "(3) Pay close attention to which TERM each course belongs to — do not mix up terms. "
+    "(4) If a field cannot be determined, use null for optional fields or empty lists/strings. "
+    "(5) Return ONLY valid JSON with no commentary or markdown."
 )
 
-USER_PROMPT_TEMPLATE = """Extract structured data from the following nursing school transcript text.
+USER_PROMPT_TEMPLATE = """Extract structured data from the following official nursing school transcript.
+
+IMPORTANT: Pay close attention to course-term assignments. Each course belongs to a specific term
+(semester/session). Read the term headers carefully and assign each course to the correct term.
+Do NOT mix up which courses belong to which terms.
 
 Return a JSON object matching this exact schema:
 {schema}
 
-Important instructions:
-- program_type must be one of: ADN, BSN, MSN, LPN. If unclear, use the best match or empty string.
-- graduation_confirmed should be true only if the transcript explicitly states the degree was conferred/awarded.
-- For courses, extract every course listed with as much detail as available.
-- For transfer_credits, group courses by their originating institution.
-- For gpa_info, extract cumulative GPA, program-specific GPA, and per-term GPA if available.
-- Dates should be in YYYY-MM-DD format when possible.
-- If the transcript spans multiple institutions, list all in the institutions array.
+Key extraction rules:
+- program_type: LPN, ADN, BSN, MSN, or DNP only. Use best match from program name and credential type.
+- graduation_confirmed: true ONLY if transcript explicitly states degree was conferred/awarded/completed.
+- credential_type: extract the exact credential name (Career Certificate, Associate Degree, Diploma, etc.)
+- document_issued_to: if transcript header says "Issued To:" capture that value verbatim.
+- enrollment_start: find the earliest term/session header on the transcript.
+- academic_standing_per_term: extract the standing shown after each term (Good Standing, Scholastic Probation, etc.)
+- For courses marked (R): set repeated=true, keep the (R) in the grade field.
+- earned_credit_hours: look for "Total Earned Credits" or similar — this may differ from attempted.
+- Dates in YYYY-MM-DD format. Terms as written (e.g. "2018 Fall Session", "Spring 2019").
 
-Transcript text:
+Transcript text (LINE blocks followed by structured TABLE data):
 {raw_text}"""
 
 
-def _extract_text_with_textract(pdf_bytes: bytes, s3_key: str) -> tuple[str, int]:
-    """Extract text from a PDF using Textract async API via S3 reference.
+def _extract_tables_from_blocks(blocks: list[dict]) -> str:
+    """Convert Textract TABLE blocks into pipe-delimited rows for cleaner parsing.
 
-    Uses start_document_text_detection (async) so multi-page PDFs and
-    documents over 5MB are fully supported. Polls until the job completes
-    or the Lambda timeout approaches.
+    Transcript course data is typically in tables. Extracting table structure
+    preserves the column alignment (course | grade | credits | term) that raw
+    LINE text loses, giving the AI model a much clearer signal.
+    """
+    block_map = {b["Id"]: b for b in blocks}
+    table_texts: list[str] = []
+
+    for block in blocks:
+        if block["BlockType"] != "TABLE":
+            continue
+
+        rows: dict[int, dict[int, str]] = {}
+        for rel in block.get("Relationships", []):
+            if rel["Type"] != "CHILD":
+                continue
+            for cell_id in rel["Ids"]:
+                cell = block_map.get(cell_id)
+                if not cell or cell["BlockType"] != "CELL":
+                    continue
+                row_idx = cell["RowIndex"]
+                col_idx = cell["ColumnIndex"]
+                cell_words: list[str] = []
+                for cell_rel in cell.get("Relationships", []):
+                    if cell_rel["Type"] != "CHILD":
+                        continue
+                    for word_id in cell_rel["Ids"]:
+                        word = block_map.get(word_id)
+                        if word and word["BlockType"] == "WORD":
+                            cell_words.append(word["Text"])
+                rows.setdefault(row_idx, {})[col_idx] = " ".join(cell_words)
+
+        if not rows:
+            continue
+
+        table_lines = []
+        for row_idx in sorted(rows):
+            row_data = rows[row_idx]
+            table_lines.append(" | ".join(row_data.get(c, "") for c in sorted(row_data)))
+        table_texts.append("\n".join(table_lines))
+
+    if not table_texts:
+        return ""
+    return "\n\n[STRUCTURED TABLE DATA]\n" + "\n\n[TABLE]\n".join(table_texts)
+
+
+def _extract_text_with_textract(pdf_bytes: bytes, s3_key: str) -> tuple[str, int]:
+    """Extract text and table structure from a PDF using Textract async document analysis.
+
+    Uses start_document_analysis with TABLES feature so course/grade/credit columns
+    are captured with their structure intact. Polls until the job completes or
+    the Lambda timeout approaches.
     """
     import time
 
     bucket = s3_utils.get_bucket_name()
 
-    # Start async job referencing the file already in S3
-    response = _textract.start_document_text_detection(
-        DocumentLocation={"S3Object": {"Bucket": bucket, "Name": s3_key}}
+    # Start async document analysis with TABLES and FORMS features
+    response = _textract.start_document_analysis(
+        DocumentLocation={"S3Object": {"Bucket": bucket, "Name": s3_key}},
+        FeatureTypes=["TABLES", "FORMS"],
     )
     job_id = response["JobId"]
-    logger.info("Textract job started: %s", job_id)
+    logger.info("Textract analysis job started: %s", job_id)
 
-    # Poll until complete (max 240s, staying within the 300s Lambda timeout)
-    deadline = time.time() + 240
+    # Poll until complete (max 260s, staying within the 300s Lambda timeout)
+    deadline = time.time() + 260
     while time.time() < deadline:
-        result = _textract.get_document_text_detection(JobId=job_id)
+        result = _textract.get_document_analysis(JobId=job_id)
         status = result["JobStatus"]
         if status == "SUCCEEDED":
             break
@@ -117,32 +186,48 @@ def _extract_text_with_textract(pdf_bytes: bytes, s3_key: str) -> tuple[str, int
             raise RuntimeError(f"Textract job failed: {result.get('StatusMessage', 'unknown')}")
         time.sleep(5)
     else:
-        raise TimeoutError("Textract job did not complete within 240 seconds")
+        raise TimeoutError("Textract job did not complete within 260 seconds")
 
-    # Collect all pages (Textract paginates results)
+    # Collect all blocks across paginated results
     blocks = list(result.get("Blocks", []))
     next_token = result.get("NextToken")
     while next_token:
-        page_result = _textract.get_document_text_detection(JobId=job_id, NextToken=next_token)
+        page_result = _textract.get_document_analysis(JobId=job_id, NextToken=next_token)
         blocks.extend(page_result.get("Blocks", []))
         next_token = page_result.get("NextToken")
 
+    # Extract raw text from LINE blocks (preserves reading order)
     lines = [b["Text"] for b in blocks if b["BlockType"] == "LINE"]
-    page_count = sum(1 for b in blocks if b["BlockType"] == "PAGE")
+    raw_text = "\n".join(lines)
 
-    return "\n".join(lines), max(page_count, 1)
+    # Extract structured table text and append (gives AI model column-aligned data)
+    table_text = _extract_tables_from_blocks(blocks)
+    combined_text = raw_text + "\n" + table_text if table_text else raw_text
+
+    page_count = sum(1 for b in blocks if b["BlockType"] == "PAGE")
+    logger.info(
+        "Textract extracted %d LINE blocks, %d TABLE blocks, %d page(s)",
+        len(lines),
+        sum(1 for b in blocks if b["BlockType"] == "TABLE"),
+        page_count,
+    )
+
+    return combined_text, max(page_count, 1)
 
 
 def _parse_with_bedrock(raw_text: str) -> dict:
-    """Send raw transcript text to Nova Lite for structured extraction.
+    """Send transcript text to Nova Pro for high-accuracy structured extraction.
 
-    Input is capped at 12,000 characters to ensure the model has enough
-    output token budget to complete the JSON response.
+    Nova Pro is used here (instead of Nova Lite) because accurate field extraction
+    is the most critical step — extraction errors propagate through all 18 rules
+    and the AI fraud analysis. The higher cost is justified for fraud detection.
+
+    Input is capped at 20,000 characters to handle multi-page transcripts while
+    staying within Nova Pro's output token budget.
     """
-    # Nova Lite output limit is ~5K tokens; keep input small so JSON output fits cleanly
-    MAX_INPUT_CHARS = 6_000
+    MAX_INPUT_CHARS = 20_000
     if len(raw_text) > MAX_INPUT_CHARS:
-        raw_text = raw_text[:MAX_INPUT_CHARS] + "\n[... truncated for extraction ...]"
+        raw_text = raw_text[:MAX_INPUT_CHARS] + "\n[... transcript truncated at 20,000 chars ...]"
 
     schema_str = json.dumps(EXTRACTION_SCHEMA, indent=2)
     prompt = USER_PROMPT_TEMPLATE.format(schema=schema_str, raw_text=raw_text)
@@ -150,8 +235,8 @@ def _parse_with_bedrock(raw_text: str) -> dict:
     extracted = invoke_nova_json(
         prompt=prompt,
         system_prompt=SYSTEM_PROMPT,
-        model_id=NOVA_LITE,
-        max_tokens=5000,
+        model_id=NOVA_PRO,
+        max_tokens=6000,
         temperature=0.0,
     )
 
@@ -190,8 +275,8 @@ def handler(event, context):
         if not raw_text.strip():
             raise ValueError("Textract returned no text from the PDF. The document may be image-only or corrupt.")
 
-        # Step 3: Parse raw text into structured JSON via Bedrock
-        logger.info("Sending text to Bedrock Nova Lite for structured extraction")
+        # Step 3: Parse raw text into structured JSON via Bedrock Nova Pro
+        logger.info("Sending text to Bedrock Nova Pro for structured extraction")
         extracted_data = _parse_with_bedrock(raw_text)
 
         # Attach raw text and page count to the extracted data

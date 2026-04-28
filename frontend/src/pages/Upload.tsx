@@ -34,10 +34,11 @@ export default function Upload() {
     setError('');
     try {
       const { transcriptId } = await api.uploadTranscript(file);
+      // Brief pause so user sees the success state before navigating
+      await new Promise((r) => setTimeout(r, 800));
       navigate(`/transcript/${transcriptId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
-    } finally {
       setUploading(false);
     }
   };
@@ -100,9 +101,15 @@ export default function Upload() {
         <button
           onClick={handleUpload}
           disabled={uploading}
-          className="mt-6 w-full px-4 py-3 bg-msbon-600 text-white rounded-lg hover:bg-msbon-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="mt-6 w-full px-4 py-3 bg-msbon-600 text-white rounded-lg hover:bg-msbon-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
-          {uploading ? 'Uploading & Processing...' : 'Upload & Verify Transcript'}
+          {uploading && (
+            <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            </svg>
+          )}
+          {uploading ? 'Uploading to S3 & starting pipeline…' : 'Upload & Verify Transcript'}
         </button>
       )}
 

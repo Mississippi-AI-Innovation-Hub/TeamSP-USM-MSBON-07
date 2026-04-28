@@ -71,7 +71,7 @@ export default function Review() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Link to={`/transcript/${id}`} className="text-sm text-msbon-600 hover:text-msbon-800 mb-1 inline-block">
+      <Link to={`/transcript/${id}`} className="text-sm text-msbon-600 hover:text-msbon-800 mb-2 inline-block">
         &larr; Back to Verification
       </Link>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Human Review</h2>

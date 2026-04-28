@@ -63,7 +63,12 @@ class ApiStack(Stack):
         )
 
         textract_policy = iam.PolicyStatement(
-            actions=["textract:AnalyzeDocument", "textract:DetectDocumentText"],
+            actions=[
+                "textract:AnalyzeDocument",
+                "textract:DetectDocumentText",
+                "textract:StartDocumentTextDetection",
+                "textract:GetDocumentTextDetection",
+            ],
             resources=["*"],
         )
 
@@ -89,7 +94,7 @@ class ApiStack(Stack):
             code=_lambda.Code.from_asset(f"{BACKEND_DIR}/lambdas/extract"),
             layers=[shared_layer],
             environment=common_env,
-            timeout=Duration.seconds(120),
+            timeout=Duration.seconds(300),
             memory_size=1024,
         )
         extract_fn.add_to_role_policy(textract_policy)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { StatusBadge, RiskBadge } from '../components/StatusBadge';
@@ -7,6 +7,56 @@ import RuleExplanation from '../components/RuleExplanation';
 import TranscriptViewer from '../components/TranscriptViewer';
 import type { Transcript, Verification, ExtractedTranscript } from '../types';
 
+const PROCESSING_STATUSES = new Set(['UPLOADED', 'EXTRACTING', 'VERIFYING', 'REPORTING']);
+
+const PIPELINE_STEPS = [
+  { status: 'UPLOADED', label: 'Transcript uploaded' },
+  { status: 'EXTRACTING', label: 'Extracting text & courses (OCR)' },
+  { status: 'VERIFYING', label: 'Running verification rules + AI analysis' },
+  { status: 'REPORTING', label: 'Generating report' },
+];
+
+function ProcessingIndicator({ status }: { status: string }) {
+  const currentIdx = PIPELINE_STEPS.findIndex((s) => s.status === status);
+  return (
+    <div className="bg-white rounded-lg border p-8">
+      <div className="flex items-center gap-3 mb-6">
+        <svg className="animate-spin h-6 w-6 text-msbon-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+        <span className="text-lg font-semibold text-gray-800">Verification in progress…</span>
+      </div>
+      <ol className="space-y-3">
+        {PIPELINE_STEPS.map((step, i) => {
+          const done = i < currentIdx;
+          const active = i === currentIdx;
+          return (
+            <li key={step.status} className="flex items-center gap-3">
+              {done ? (
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</span>
+              ) : active ? (
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-msbon-500 flex items-center justify-center">
+                  <svg className="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                </span>
+              ) : (
+                <span className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-300" />
+              )}
+              <span className={`text-sm ${done ? 'text-green-700 font-medium' : active ? 'text-msbon-700 font-semibold' : 'text-gray-400'}`}>
+                {step.label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-5 text-xs text-gray-400">This page checks automatically every 5 seconds — no need to refresh.</p>
+    </div>
+  );
+}
+
 export default function VerificationDetail() {
   const { id } = useParams<{ id: string }>();
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -14,21 +64,32 @@ export default function VerificationDetail() {
   const [_extractedData] = useState<ExtractedTranscript | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  const fetchData = (isInitial = false) => {
     if (!id) return;
     Promise.all([
       api.getTranscript(id),
-      api.getVerification(id).catch(() => []),
+      api.getVerification(id).catch(() => [] as Verification[]),
     ])
       .then(([t, verifications]) => {
         setTranscript(t);
-        if (verifications.length > 0) {
-          setVerification(verifications[0]);
+        if (verifications.length > 0) setVerification(verifications[0]);
+        // Stop polling once the pipeline finishes
+        if (!PROCESSING_STATUSES.has(t.status) && pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
         }
       })
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .finally(() => { if (isInitial) setLoading(false); });
+  };
+
+  useEffect(() => {
+    fetchData(true);
+    pollRef.current = setInterval(() => fetchData(false), 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   if (loading) return <div className="text-center py-12 text-gray-500">Loading...</div>;
@@ -43,7 +104,7 @@ export default function VerificationDetail() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link to="/" className="text-sm text-msbon-600 hover:text-msbon-800 mb-1 inline-block">
+          <Link to="/dashboard" className="text-sm text-msbon-600 hover:text-msbon-800 mb-1 inline-block">
             &larr; Back to Dashboard
           </Link>
           <h2 className="text-2xl font-bold text-gray-900">{transcript.fileName}</h2>
@@ -141,13 +202,11 @@ export default function VerificationDetail() {
           {/* Extracted Data */}
           {_extractedData && <TranscriptViewer data={_extractedData} />}
         </div>
+      ) : PROCESSING_STATUSES.has(transcript.status) ? (
+        <ProcessingIndicator status={transcript.status} />
       ) : (
         <div className="bg-white rounded-lg border p-8 text-center">
-          <p className="text-gray-500">
-            {transcript.status === 'UPLOADED' || transcript.status === 'EXTRACTING'
-              ? 'Verification is in progress. Refresh to check status.'
-              : 'No verification results available yet.'}
-          </p>
+          <p className="text-gray-500">No verification results available yet.</p>
         </div>
       )}
     </div>

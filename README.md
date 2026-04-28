@@ -21,10 +21,10 @@ The PoC explores how AI can **augment** — not replace — staff review by:
 
 This PoC covers:
 - PDF transcript upload and secure storage
-- OCR text extraction via Amazon Textract
-- Structured data extraction (courses, grades, GPA, dates) via Amazon Bedrock Nova Lite
-- 13 deterministic verification rules across graduation, program completion, accreditation, and fraud indicators
-- Holistic AI analysis via Amazon Bedrock Nova Pro
+- OCR text extraction via Amazon Textract (with TABLES and FORMS analysis for structured column data)
+- Structured data extraction via Amazon Bedrock Nova Pro (16 fields including academic standing, credential type, enrollment timeline, and per-course repeat indicators)
+- 18 deterministic verification rules across graduation, program completion, accreditation, and fraud indicators
+- Holistic AI fraud analysis via Amazon Bedrock Nova Pro
 - Human review and annotation workflow
 - Immutable audit trail for every action
 
@@ -166,7 +166,7 @@ This PoC was developed within a limited timeline and controlled environment. It 
 
 ## Disclaimer
 
-This repository contains code and supporting materials developed as part of a Mississippi Artificial Intelligence Innovation Hub Proof of Concept project. The contents are provided for prototype demonstration purposes. They are not production ready by default and may include simplified workflows, incomplete security guardrails, placeholder integrations, or reduced controls appropriate only for a Proof-of-Concept environment.
+This repository contains code and supporting materials developed as part of a Mississippi Artificial Intelligence Innovation Hub Proof of Concept project. The contents are provided for prototype demonstration purposes only. They are not production-ready and may include simplified workflows, incomplete security guardrails, placeholder integrations, or reduced controls appropriate only for a Proof-of-Concept environment. All outputs are advisory only and require human review before any action is taken.
 
 ## License
 

@@ -59,22 +59,27 @@ Textract    Bedrock     Bedrock
 
 Orchestrates three Lambda functions in sequence:
 
-1. **Extract** — Runs Textract OCR, then sends text to Nova Lite for structured parsing
-2. **Verify** — Applies 13 deterministic rules and calls Nova Pro for holistic analysis
+1. **Extract** — Runs Textract (with TABLES + FORMS features), then sends structured text to Nova Pro for extraction
+2. **Verify** — Applies 18 deterministic rules and calls Nova Pro for holistic fraud analysis
 3. **Report** — Generates a structured verification report and saves it to S3
 
 ### Extract Lambda
 
-- Calls Textract `StartDocumentTextDetection` (async API) referencing the S3 object
-- Polls until the job completes (up to 240 seconds, within the 300-second Lambda timeout)
-- Caps OCR text at 6,000 characters before sending to Nova Lite (output token budget management)
-- Saves structured JSON (courses, GPA, graduation, institutions, transfer credits) to S3
+- Calls Textract `StartDocumentAnalysis` (async API) with `TABLES` and `FORMS` feature types, referencing the S3 object
+- Parses TABLE blocks into pipe-delimited rows to preserve course/grade/credit column alignment
+- Combines raw LINE text with structured TABLE text before sending to the model
+- Polls until the job completes (up to 260 seconds, within the 300-second Lambda timeout)
+- Uses **Nova Pro** for structured extraction (not Nova Lite) — accuracy is critical since extraction errors propagate through all 18 rules
+- Input capped at 20,000 characters (handles multi-page transcripts without truncation)
+- Extracts 16 fields: institutions, program type, credential type, courses with repeat flags, transfer credits, academic standing per term, graduation info, GPA, enrollment timeline, document issuance target
+- Saves structured JSON to S3
 
 ### Verify Lambda
 
 - Loads extracted data from S3
-- Applies 13 deterministic rules (see below)
-- Calls Nova Pro for holistic transcript analysis with plain-language explanation
+- Normalizes field names (bridges extraction schema to rules engine schema)
+- Applies 18 deterministic rules (see below)
+- Calls Nova Pro for holistic transcript fraud analysis with plain-language explanation
 - Saves verification result to DynamoDB and S3
 - Updates transcript status to `REVIEW_REQUIRED`
 
@@ -119,28 +124,35 @@ All objects are organized by prefix:
 
 ## Verification Rules
 
-The rule engine applies 13 deterministic checks organized into four categories:
+The rule engine applies 18 deterministic checks organized into four categories:
 
 **Graduation & Conferral**
-1. Graduation date present
-2. Degree conferral confirmed
-3. Graduation date not in the future
+1. Graduation confirmed — degree explicitly conferred or completion date present
+2. Graduation date present and not in the future
 
 **Program Completion**
-4. Minimum credit hours met (ADN: 60, BSN: 120, MSN: 36, LPN: 40)
-5. Required nursing core courses present
-6. Cumulative GPA meets minimum (2.0)
-7. No failing grades in nursing courses
+3. Minimum credit hours met (LPN: 40, ADN: 60, BSN: 120, MSN: 36, DNP: 70)
+4. Required nursing core courses present (keyword match + nursing course code prefix detection)
+5. No failing grades in any course (handles community college repeat notation)
+6. Clinical hours or practicum courses identified
 
 **Accreditation**
-8. Institution is on the approved school list
-9. Program type matches an accredited program at the institution
+7. Institution on the approved Mississippi nursing school list
+8. Accreditation type recognized (ACEN, CCNE, CNEA, etc.)
 
 **Fraud Indicators**
-10. Degree conferral date is not before enrollment began
-11. GPA is within plausible range (0.0–4.0)
-12. Credit hours per term are within plausible bounds
-13. No duplicate course entries
+9. Program timeline not suspiciously compressed (semester strings parsed to dates)
+10. Enrollment periods consistent — no unexplained large gaps or overlaps
+11. Transfer credits within reasonable proportion of total hours
+12. Reported GPA consistent with calculated GPA from course grades
+13. No suspicious duplicate course entries
+
+**Extended Rules**
+14. Academic standing per term — flags Scholastic Probation or Academic Suspension
+15. Transcript officially issued to Mississippi Board of Nursing
+16. Cumulative GPA meets minimum standard (2.0 undergraduate, 3.0 graduate)
+17. Credential type matches program (Career Certificate for LPN, Associate Degree for ADN, etc.)
+18. Fraud pattern detection — flags perfect 4.0 across many courses, all-identical grades, unexplained credit discrepancies
 
 Each rule returns: `ruleId`, `status` (PASS / FLAG / UNABLE_TO_DETERMINE), `explanation`, `sourceSection`, `confidence` (HIGH / MEDIUM / LOW).
 

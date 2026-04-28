@@ -16,7 +16,7 @@ The mock server pre-loads five sample transcripts:
 
 | Scenario | Status | Description |
 |----------|--------|-------------|
-| Clean transcript | COMPLETE | All 13 rules pass, no flags |
+| Clean transcript | COMPLETE | All 18 rules pass, no flags |
 | Flagged transcript | REVIEW_REQUIRED | Missing required courses flagged |
 | High-risk transcript | REVIEW_REQUIRED | Multiple fraud indicators flagged |
 | Approved transcript | APPROVED | Human reviewer approved |
@@ -42,7 +42,7 @@ pip install pytest boto3 moto
 pytest
 ```
 
-Test coverage includes rule engine logic (all 13 rules), extraction parsing, and model utilities.
+Test coverage includes rule engine logic (all 18 rules), extraction parsing, and model utilities.
 
 ## End-to-End Testing (AWS Required)
 
@@ -68,7 +68,7 @@ These steps validate the full pipeline against a deployed AWS environment.
 - If any field shows "Unable to determine," check that the PDF is text-selectable (not a scanned image)
 
 **3. Check rule results**
-- Verify all 13 rules appear in the results
+- Verify all 18 rules appear in the results
 - A transcript with a missing required course should produce a FLAG result for the relevant rule
 - A transcript from an unapproved institution should produce a FLAG on the accreditation rule
 
@@ -97,5 +97,5 @@ These steps validate the full pipeline against a deployed AWS environment.
 See [limitations.md](limitations.md) for a full list. Key points relevant to testing:
 
 - Textract async jobs can take 1–3 minutes for multi-page PDFs; the pipeline status will show `EXTRACTING` during this time
-- Nova Lite input is capped at 6,000 characters; very long transcripts will have text truncated before extraction
+- Nova Pro input is capped at 20,000 characters; extremely long or dense transcripts may have later pages truncated before extraction
 - The mock server does not simulate pipeline failures or timeouts

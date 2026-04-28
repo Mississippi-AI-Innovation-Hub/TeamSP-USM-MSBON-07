@@ -25,10 +25,10 @@ The system does not assign applicants a risk score or probability of fraud. It f
 Amazon Textract extracts text from PDF files. Scanned-image PDFs with poor scan quality may produce incomplete or inaccurate text. Transcripts that are entirely image-based without selectable text will produce limited extraction results.
 
 **Extraction input is capped**
-To work within Nova Lite's output token budget, OCR text is capped at 6,000 characters before being sent to the model. Very long transcripts may have later pages truncated during structured extraction.
+OCR text is capped at 20,000 characters before being sent to Nova Pro for structured extraction. This is sufficient for most multi-page transcripts, but extremely long or dense documents may have later pages truncated.
 
 **AI extraction is not perfect**
-Nova Lite performs structured data extraction from unstructured OCR text. It may miss fields, misparse dates or GPA values, or fail to identify all courses if the transcript format is unusual. All extraction results should be verified against the original document.
+Nova Pro performs structured data extraction from unstructured OCR text. It may miss fields, misparse dates or GPA values, or fail to identify all courses if the transcript format is highly unusual. All extraction results should be verified against the original document.
 
 **Rule engine uses representative reference data**
 The approved school list and required course definitions are representative for PoC purposes. They are not authoritative. The rule engine may produce false positives (flagging valid transcripts) or false negatives (missing issues) depending on the specific institution or transcript format.

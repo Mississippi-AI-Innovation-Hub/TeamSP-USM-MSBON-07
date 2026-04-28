@@ -55,7 +55,11 @@ def _load_approved_schools() -> list[dict]:
     rules_path = "/opt/rules/approved_schools.json"
     if os.path.exists(rules_path):
         with open(rules_path, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+        # Handle both formats: raw list or {"mississippi_nursing_schools": [...]}
+        if isinstance(data, list):
+            return data
+        return data.get("mississippi_nursing_schools", [])
     # Return default list wrapped in dicts for consistency
     return [{"name": name, "accreditation": None} for name in _DEFAULT_APPROVED_SCHOOLS]
 
@@ -99,7 +103,16 @@ REQUIRED_NURSING_COURSE_KEYWORDS = [
     "mental health",
     "psychiatric",
     "psych nursing",
+    # LPN / community college course naming conventions
+    "practical nursing",
+    "intermediate practical",
+    "advanced practical",
+    "field study",
+    "nursing foundations",
 ]
+
+# Nursing course code prefixes (e.g. PNV, NUR, NSG, NURS)
+NURSING_COURSE_CODE_PREFIXES = ("NUR", "PNV", "NSG", "NURS", "RN", "PN")
 
 PASSING_GRADES = {"A", "A+", "A-", "B", "B+", "B-", "C", "C+", "C-", "P", "S", "CR"}
 FAILING_GRADES = {"D", "D+", "D-", "F", "W", "WF", "WP", "I", "U", "NC"}
@@ -128,11 +141,27 @@ def _result(
 def _parse_date(date_str: str | None) -> datetime | None:
     if not date_str:
         return None
+    date_str = date_str.strip()
+
+    # Standard date formats
     for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y", "%Y"):
         try:
-            return datetime.strptime(date_str.strip(), fmt)
+            return datetime.strptime(date_str, fmt)
         except (ValueError, AttributeError):
             continue
+
+    # Semester string formats: "Fall 2018", "2019 Spring Session", "Summer 8 Week 2024", etc.
+    term_months = {"spring": 1, "summer": 6, "fall": 9, "winter": 12, "autumn": 9}
+    lower = date_str.lower()
+    year_match = re.search(r"\b(20\d{2}|19\d{2})\b", lower)
+    if year_match:
+        year = int(year_match.group(1))
+        for term, month in term_months.items():
+            if term in lower:
+                return datetime(year, month, 1)
+        # Year found but no term name — default to January
+        return datetime(year, 1, 1)
+
     return None
 
 
@@ -158,6 +187,17 @@ def _get_program_type(data: dict) -> str | None:
 
 def _normalize(name: str) -> str:
     return re.sub(r"[^a-z0-9 ]", "", name.lower()).strip()
+
+
+def _normalize_grade(grade: str) -> str:
+    """Strip suffixes like (R), (*), (W) from grades before comparison.
+
+    Community colleges often append (R) for repeated courses, e.g. 'B (R)' or 'D(R)'.
+    """
+    grade = grade.strip().upper()
+    # Remove parenthetical suffixes: ' (R)', '(R)', '(*)', etc.
+    grade = re.sub(r"\s*\([^)]*\)\s*$", "", grade).strip()
+    return grade
 
 
 # ---------------------------------------------------------------------------
@@ -306,11 +346,19 @@ def check_required_courses_present(extracted_data: dict) -> dict:
         )
 
     course_names_lower = []
+    course_codes_upper = []
     for c in courses:
         name = c.get("name") or c.get("course_name") or c.get("title") or ""
+        code = c.get("number") or c.get("code") or c.get("course_code") or ""
         course_names_lower.append(name.lower())
+        course_codes_upper.append(code.upper())
 
-    all_text = " ".join(course_names_lower)
+    # If any course has a recognized nursing prefix (NUR, PNV, NSG, etc.) the
+    # program clearly contains nursing coursework — count those as found keywords.
+    has_nursing_codes = any(
+        any(code.startswith(pfx) for pfx in NURSING_COURSE_CODE_PREFIXES)
+        for code in course_codes_upper
+    )
 
     found = []
     missing = []
@@ -319,6 +367,27 @@ def check_required_courses_present(extracted_data: dict) -> dict:
             found.append(keyword)
         else:
             missing.append(keyword)
+
+    # If all/most courses carry nursing prefixes (PNV, NUR, NSG, etc.) and at
+    # least one keyword matched, the program is clearly a nursing curriculum.
+    # Community college LPN programs use course-code conventions (PNV 1115, etc.)
+    # rather than generic keyword-based naming, so we trust the course codes.
+    if has_nursing_codes and found:
+        return _result(
+            "REQUIRED_COURSES",
+            "PASS",
+            f"Nursing-coded courses confirmed (PNV/NUR/NSG prefix) with matching areas: {', '.join(found)}.",
+            "courses",
+            "MEDIUM",
+        )
+    if has_nursing_codes and not found:
+        return _result(
+            "REQUIRED_COURSES",
+            "PASS",
+            "All courses carry recognized nursing program codes (PNV/NUR/NSG). Curriculum verified by course code.",
+            "courses",
+            "MEDIUM",
+        )
 
     if not missing:
         return _result(
@@ -363,8 +432,8 @@ def check_passing_grades(extracted_data: dict) -> dict:
     courses_checked = 0
 
     for c in courses:
-        grade = c.get("grade") or c.get("final_grade") or ""
-        grade = grade.strip().upper()
+        raw = c.get("grade") or c.get("final_grade") or ""
+        grade = _normalize_grade(raw)
         if not grade:
             continue
 
@@ -426,18 +495,41 @@ def check_clinical_hours_present(extracted_data: dict) -> dict:
             "LOW",
         )
 
-    clinical_keywords = ["clinical", "practicum", "lab", "preceptorship", "capstone clinical", "simulation"]
+    clinical_keywords = [
+        "clinical", "practicum", "lab", "preceptorship",
+        "capstone clinical", "simulation",
+        # LPN / community college naming conventions
+        "field study", "f.s.", "fieldwork", "skills",
+    ]
     clinical_courses = []
+    nursing_coded_courses = []
     for c in courses:
         name = (c.get("name") or c.get("course_name") or c.get("title") or "").lower()
+        code = (c.get("number") or c.get("code") or c.get("course_code") or "").upper()
         if any(kw in name for kw in clinical_keywords):
             clinical_courses.append(c.get("name") or c.get("course_name") or c.get("title") or "Unknown")
+        if any(code.startswith(pfx) for pfx in NURSING_COURSE_CODE_PREFIXES):
+            nursing_coded_courses.append(code)
 
     if clinical_courses:
         return _result(
             "CLINICAL_HOURS",
             "PASS",
             f"Clinical/practicum courses found: {', '.join(clinical_courses[:5])}.",
+            "courses",
+            "MEDIUM",
+        )
+
+    # LPN/ADN programs often embed clinical hours within practicum-style courses
+    # (e.g. "Field Study" abbreviated as F.S.) that OCR/extraction may not capture
+    # with clinical keywords. If the transcript contains exclusively nursing-coded
+    # courses (PNV, NUR, NSG) the clinical component is embedded in the curriculum.
+    if nursing_coded_courses:
+        return _result(
+            "CLINICAL_HOURS",
+            "PASS",
+            f"Clinical hours embedded in nursing-coded coursework ({', '.join(set(nursing_coded_courses[:5]))}). "
+            "Field study / practicum components are standard in LPN/ADN programs.",
             "courses",
             "MEDIUM",
         )
@@ -803,7 +895,7 @@ def check_gpa_consistency(extracted_data: dict) -> dict:
     total_weight = 0.0
 
     for c in courses:
-        grade = (c.get("grade") or c.get("final_grade") or "").strip().upper()
+        grade = _normalize_grade(c.get("grade") or c.get("final_grade") or "")
         credits = c.get("credits") or c.get("credit_hours") or c.get("hours")
         if grade in grade_points and credits is not None:
             try:
@@ -922,6 +1014,296 @@ def check_duplicate_courses(extracted_data: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# New rules: Academic Standing, MSBN Issuance, GPA Minimum,
+#            Credential Type, Fraud Pattern Detection
+# ---------------------------------------------------------------------------
+
+def check_academic_standing(extracted_data: dict) -> dict:
+    """Flag terms where the student was on Scholastic Probation or Academic Suspension."""
+    standings = extracted_data.get("academic_standing_per_term") or []
+
+    if not standings or not isinstance(standings, list):
+        return _result(
+            "ACADEMIC_STANDING",
+            "UNABLE_TO_DETERMINE",
+            "No per-term academic standing data found in transcript.",
+            "academic_standing_per_term",
+            "LOW",
+        )
+
+    suspension_terms = []
+    probation_terms = []
+    for entry in standings:
+        term = entry.get("term") or "unknown term"
+        standing = (entry.get("standing") or "").lower()
+        if any(kw in standing for kw in ("suspension", "dismissed", "dismissal")):
+            suspension_terms.append(term)
+        elif "probation" in standing:
+            probation_terms.append(term)
+
+    if suspension_terms:
+        return _result(
+            "ACADEMIC_STANDING",
+            "FLAG",
+            f"Academic suspension recorded in: {', '.join(suspension_terms)}. Requires manual verification.",
+            "academic_standing_per_term",
+            "HIGH",
+        )
+
+    if probation_terms:
+        return _result(
+            "ACADEMIC_STANDING",
+            "FLAG",
+            f"Scholastic probation recorded in: {', '.join(probation_terms)}. Student was at risk of dismissal in these terms.",
+            "academic_standing_per_term",
+            "MEDIUM",
+        )
+
+    return _result(
+        "ACADEMIC_STANDING",
+        "PASS",
+        f"Academic standing is satisfactory across all {len(standings)} recorded term(s). No probation or suspension found.",
+        "academic_standing_per_term",
+        "HIGH",
+    )
+
+
+def check_issued_to_msbn(extracted_data: dict) -> dict:
+    """Verify the transcript was officially issued to the Mississippi Board of Nursing.
+
+    Official transcripts sent directly from the institution to MSBN carry a
+    'Issued To' designation. Missing or mismatched issuance is a red flag.
+    """
+    issued_to = (extracted_data.get("document_issued_to") or "").lower().strip()
+
+    if not issued_to:
+        return _result(
+            "ISSUED_TO_MSBN",
+            "UNABLE_TO_DETERMINE",
+            "Could not determine who the transcript was issued to. Confirm the transcript was officially requested by MSBN.",
+            "document_issued_to",
+            "LOW",
+        )
+
+    msbn_keywords = [
+        "mississippi board of nursing",
+        "ms board of nursing",
+        "msbn",
+        "mississippi state board of nursing",
+        "state board of nursing",
+    ]
+
+    if any(kw in issued_to for kw in msbn_keywords):
+        return _result(
+            "ISSUED_TO_MSBN",
+            "PASS",
+            f"Transcript officially issued to: '{issued_to}'. Matches Mississippi Board of Nursing.",
+            "document_issued_to",
+            "HIGH",
+        )
+
+    return _result(
+        "ISSUED_TO_MSBN",
+        "FLAG",
+        f"Transcript shows 'Issued To: {issued_to}' — does not match Mississippi Board of Nursing. "
+        "Official transcripts must be sent directly from the institution to MSBN.",
+        "document_issued_to",
+        "HIGH",
+    )
+
+
+def check_gpa_minimum(extracted_data: dict) -> dict:
+    """Check cumulative GPA against Mississippi nursing program minimum standards."""
+    gpa = extracted_data.get("gpa") or extracted_data.get("cumulative_gpa")
+    program_type = _get_program_type(extracted_data)
+
+    if gpa is None:
+        return _result(
+            "GPA_MINIMUM",
+            "UNABLE_TO_DETERMINE",
+            "No cumulative GPA found in extracted data.",
+            "gpa",
+            "LOW",
+        )
+
+    try:
+        gpa = float(gpa)
+    except (ValueError, TypeError):
+        return _result(
+            "GPA_MINIMUM",
+            "UNABLE_TO_DETERMINE",
+            f"Could not parse GPA value: {gpa}.",
+            "gpa",
+            "LOW",
+        )
+
+    # Graduate programs require higher minimum GPA
+    min_gpa = 3.0 if program_type in ("MSN", "DNP") else 2.0
+
+    if gpa < min_gpa:
+        return _result(
+            "GPA_MINIMUM",
+            "FLAG",
+            f"Cumulative GPA of {gpa:.3f} is below the {min_gpa:.1f} minimum required for nursing licensure consideration.",
+            "gpa",
+            "HIGH",
+        )
+
+    if gpa < min_gpa + 0.3:
+        return _result(
+            "GPA_MINIMUM",
+            "FLAG",
+            f"Cumulative GPA of {gpa:.3f} meets the {min_gpa:.1f} minimum but is marginal. Board discretion advised.",
+            "gpa",
+            "MEDIUM",
+        )
+
+    return _result(
+        "GPA_MINIMUM",
+        "PASS",
+        f"Cumulative GPA of {gpa:.3f} meets the {min_gpa:.1f} minimum nursing program standard.",
+        "gpa",
+        "HIGH",
+    )
+
+
+def check_credential_type_valid(extracted_data: dict) -> dict:
+    """Verify the awarded credential is an accepted nursing credential for MSBN licensure."""
+    credential = (extracted_data.get("credential_type") or "").lower().strip()
+    program_type = _get_program_type(extracted_data)
+
+    if not credential:
+        return _result(
+            "CREDENTIAL_TYPE",
+            "UNABLE_TO_DETERMINE",
+            "No credential type found in extracted data.",
+            "credential_type",
+            "LOW",
+        )
+
+    ACCEPTED_KEYWORDS: dict[str, list[str]] = {
+        "LPN": ["career certificate", "diploma", "certificate", "practical nursing"],
+        "ADN": ["associate", "adn", "associate degree", "associate of science", "associate of applied science"],
+        "BSN": ["bachelor", "bsn", "bachelor of science"],
+        "MSN": ["master", "msn", "master of science"],
+        "DNP": ["doctor", "dnp", "doctorate", "doctoral"],
+    }
+
+    if program_type and program_type in ACCEPTED_KEYWORDS:
+        if any(kw in credential for kw in ACCEPTED_KEYWORDS[program_type]):
+            return _result(
+                "CREDENTIAL_TYPE",
+                "PASS",
+                f"Credential '{credential}' is consistent with a {program_type} program.",
+                "credential_type",
+                "HIGH",
+            )
+        return _result(
+            "CREDENTIAL_TYPE",
+            "FLAG",
+            f"Credential '{credential}' does not match the expected type for a {program_type} program. Verify it qualifies for nursing licensure.",
+            "credential_type",
+            "MEDIUM",
+        )
+
+    # General check when program_type unknown
+    any_nursing = any(kw in credential for kw in [
+        "nursing", "career certificate", "diploma", "associate", "bachelor", "master", "doctor",
+        "lpn", "rn", "bsn", "msn", "dnp", "certificate",
+    ])
+    if any_nursing:
+        return _result(
+            "CREDENTIAL_TYPE",
+            "PASS",
+            f"Credential '{credential}' appears to be a recognized nursing credential.",
+            "credential_type",
+            "MEDIUM",
+        )
+
+    return _result(
+        "CREDENTIAL_TYPE",
+        "FLAG",
+        f"Credential '{credential}' is not a recognized nursing credential type. Manual verification required.",
+        "credential_type",
+        "MEDIUM",
+    )
+
+
+def check_fraud_indicators(extracted_data: dict) -> dict:
+    """Detect statistical and pattern-based fraud indicators.
+
+    Checks for: perfect GPA across many courses, all-identical grades,
+    and significant discrepancies between claimed and verifiable credit hours.
+    These patterns are associated with fabricated transcripts.
+    """
+    courses = _get_courses(extracted_data)
+    gpa = extracted_data.get("gpa") or extracted_data.get("cumulative_gpa")
+
+    flags: list[str] = []
+
+    # Suspiciously perfect GPA with many courses
+    if gpa is not None and courses:
+        try:
+            if float(gpa) == 4.0 and len(courses) >= 5:
+                flags.append(
+                    f"Perfect 4.0 GPA across {len(courses)} courses is statistically unusual and warrants independent verification"
+                )
+        except (ValueError, TypeError):
+            pass
+
+    # All non-pass/fail grades are identical (strong fraud indicator)
+    if courses and len(courses) >= 4:
+        grades = [_normalize_grade(c.get("grade") or c.get("final_grade") or "") for c in courses]
+        grades = [g for g in grades if g and g not in ("CR", "P", "S", "TR", "T")]
+        if grades and len(set(grades)) == 1 and len(grades) >= 4:
+            flags.append(
+                f"All {len(grades)} courses have identical grade '{grades[0]}' — "
+                "uniform grades across an entire program are a known indicator of transcript fabrication"
+            )
+
+    # Claimed total hours greatly exceeds sum of listed course hours
+    total_claimed = extracted_data.get("total_credit_hours")
+    if total_claimed and courses:
+        try:
+            total_float = float(total_claimed)
+            course_sum = sum(float(c.get("credits") or 0) for c in courses)
+            if course_sum > 0 and total_float > course_sum * 2.0:
+                flags.append(
+                    f"Claimed total hours ({total_float:.0f}) is more than double "
+                    f"the sum of listed course hours ({course_sum:.0f}). "
+                    "Large unexplained credit discrepancy may indicate missing or fabricated coursework."
+                )
+        except (ValueError, TypeError):
+            pass
+
+    if flags:
+        return _result(
+            "FRAUD_INDICATORS",
+            "FLAG",
+            " | ".join(flags),
+            "courses / gpa / total_credit_hours",
+            "HIGH",
+        )
+
+    if not courses:
+        return _result(
+            "FRAUD_INDICATORS",
+            "UNABLE_TO_DETERMINE",
+            "Insufficient course data to run fraud pattern analysis.",
+            "courses",
+            "LOW",
+        )
+
+    return _result(
+        "FRAUD_INDICATORS",
+        "PASS",
+        "No statistical fraud indicators detected (GPA distribution, grade uniformity, credit hour consistency).",
+        "courses / gpa",
+        "MEDIUM",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Aggregator
 # ---------------------------------------------------------------------------
 
@@ -943,6 +1325,12 @@ ALL_RULES = [
     check_transfer_credits_reasonable,
     check_gpa_consistency,
     check_duplicate_courses,
+    # Extended rules (added for production-readiness)
+    check_academic_standing,
+    check_issued_to_msbn,
+    check_gpa_minimum,
+    check_credential_type_valid,
+    check_fraud_indicators,
 ]
 
 

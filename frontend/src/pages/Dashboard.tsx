@@ -1,20 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/StatusBadge';
 import type { Transcript } from '../types';
 
+const PROCESSING = new Set(['UPLOADED', 'EXTRACTING', 'VERIFYING', 'REPORTING']);
+
 export default function Dashboard() {
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  const fetchTranscripts = (isInitial = false) => {
     api
       .listTranscripts()
-      .then(setTranscripts)
+      .then((data) => {
+        setTranscripts(data);
+        const anyProcessing = data.some((t) => PROCESSING.has(t.status));
+        if (!anyProcessing && pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      })
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .finally(() => { if (isInitial) setLoading(false); });
+  };
+
+  useEffect(() => {
+    fetchTranscripts(true);
+    pollRef.current = setInterval(() => fetchTranscripts(false), 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
   if (loading) return <div className="text-center py-12 text-gray-500">Loading transcripts...</div>;
