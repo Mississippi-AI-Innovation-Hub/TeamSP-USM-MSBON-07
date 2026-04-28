@@ -53,7 +53,7 @@ This PoC covers:
    ▼           ▼          ▼
 Textract    Bedrock     Bedrock
 + Nova      Nova Pro    Nova Lite
-  Lite      (verify)    (report)
+  Pro       (verify)    (report)
 (extract)
 ```
 
