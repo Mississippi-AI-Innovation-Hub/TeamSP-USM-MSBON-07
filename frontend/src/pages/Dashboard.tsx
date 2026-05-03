@@ -164,7 +164,7 @@ export default function Dashboard() {
                 <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide hidden sm:table-cell">School</th>
                 <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide hidden md:table-cell">Program</th>
                 <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</th>
-                <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Flags</th>
+                <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Flags / Undet.</th>
                 <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide hidden lg:table-cell">Uploaded</th>
                 <th className="text-right px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Action</th>
               </tr>
@@ -181,13 +181,20 @@ export default function Dashboard() {
                     <StatusBadge status={t.status} />
                   </td>
                   <td className="px-5 py-4 text-sm">
-                    {t.flagCount != null ? (
-                      <span className={`font-bold ${t.flagCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                        {t.flagCount > 0 ? t.flagCount : '—'}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400 dark:text-gray-600">—</span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {t.flagCount != null ? (
+                        <span className={`font-bold ${t.flagCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                          {t.flagCount > 0 ? t.flagCount : '—'}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-600">—</span>
+                      )}
+                      {(t.undeterminedCount ?? 0) > 0 && (
+                        <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded">
+                          {t.undeterminedCount}?
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 hidden lg:table-cell">
                     {new Date(t.uploadDate).toLocaleDateString()}

@@ -81,8 +81,13 @@ def handler(event, context):
         report_key = s3_utils.save_report(transcript_id, report)
         logger.info("Saved report to %s", report_key)
 
-        # Mark transcript as COMPLETE — pipeline is done
-        db.update_transcript_status(transcript_id, "COMPLETE")
+        # Mark transcript as COMPLETE and persist counts so the dashboard can display them
+        db.update_transcript_status(
+            transcript_id, "COMPLETE",
+            flagCount=flag_count,
+            undeterminedCount=unable_count,
+            riskLevel=verification.get("riskLevel", "MEDIUM"),
+        )
 
         # Log audit entry
         audit = AuditEntry(

@@ -9,6 +9,7 @@ export interface Transcript {
   s3Key: string;
   extractedDataKey: string;
   flagCount?: number;
+  undeterminedCount?: number;
   riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
