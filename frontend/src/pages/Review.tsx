@@ -42,6 +42,7 @@ export default function Review() {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [extracted, setExtracted] = useState<ExtractedTranscript | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [reviews, setReviews] = useState<ReviewAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -59,12 +60,14 @@ export default function Review() {
       api.getVerification(id).catch(() => []),
       api.getReviews(id).catch(() => []),
       api.getExtractedData(id).catch(() => null),
+      api.getTranscriptPdfUrl(id).catch(() => null),
     ])
-      .then(([t, verifications, revs, ext]) => {
+      .then(([t, verifications, revs, ext, pdf]) => {
         setTranscript(t);
         if (verifications.length > 0) setVerification(verifications[0]);
         setReviews(revs);
         setExtracted(ext);
+        setPdfUrl(pdf);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -279,9 +282,47 @@ export default function Review() {
           {/* ── TAB: TRANSCRIPT VIEW ── */}
           {rightTab === 'transcript' && (
             <div className="space-y-4">
+
+              {/* PDF viewer */}
+              <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                    </svg>
+                    Original Transcript PDF
+                  </p>
+                  {pdfUrl && (
+                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-msbon-600 hover:text-msbon-800 font-medium flex items-center gap-1">
+                      Open full screen
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
+                {pdfUrl ? (
+                  <iframe
+                    src={pdfUrl}
+                    className="w-full border-0"
+                    style={{ height: '70vh' }}
+                    title="Transcript PDF"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <svg className="w-10 h-10 mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-sm">PDF not available yet</p>
+                    <p className="text-xs mt-1">Pipeline may still be processing</p>
+                  </div>
+                )}
+              </div>
+
               {!extracted ? (
                 <div className="bg-white rounded-xl border shadow-sm p-8 text-center text-gray-400 text-sm">
-                  Extracted transcript data not available yet — pipeline may still be processing.
+                  Extracted data not available yet — pipeline may still be processing.
                 </div>
               ) : (
                 <>

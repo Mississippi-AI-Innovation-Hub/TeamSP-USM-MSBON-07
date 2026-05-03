@@ -23,6 +23,9 @@ export const api = {
 
   getExtractedData: (id: string) => request<ExtractedTranscript>(`/transcripts/${id}/extracted`),
 
+  getTranscriptPdfUrl: (id: string) =>
+    request<{ url: string }>(`/transcripts/${id}/pdf`).then((r) => r.url),
+
   uploadTranscript: async (file: File) => {
     // Step 1: create transcript record and get presigned S3 URL
     const data = await request<{ transcriptId: string; uploadUrl: string }>('/transcripts', {
