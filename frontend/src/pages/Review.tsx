@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { StatusBadge, RiskBadge } from '../components/StatusBadge';
-import type { Transcript, Verification, ReviewAction, RuleResult } from '../types';
+import type { Transcript, Verification, ReviewAction, RuleResult, ExtractedTranscript } from '../types';
+
+type RightTab = 'transcript' | 'analysis' | 'review';
 
 function formatRuleId(ruleId: string): string {
   return ruleId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -39,6 +41,7 @@ export default function Review() {
   const { id } = useParams<{ id: string }>();
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [verification, setVerification] = useState<Verification | null>(null);
+  const [extracted, setExtracted] = useState<ExtractedTranscript | null>(null);
   const [reviews, setReviews] = useState<ReviewAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -47,6 +50,7 @@ export default function Review() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeRule, setActiveRule] = useState<string | null>(null);
+  const [rightTab, setRightTab] = useState<RightTab>('transcript');
 
   useEffect(() => {
     if (!id) return;
@@ -54,11 +58,13 @@ export default function Review() {
       api.getTranscript(id).catch(() => null),
       api.getVerification(id).catch(() => []),
       api.getReviews(id).catch(() => []),
+      api.getExtractedData(id).catch(() => null),
     ])
-      .then(([t, verifications, revs]) => {
+      .then(([t, verifications, revs, ext]) => {
         setTranscript(t);
         if (verifications.length > 0) setVerification(verifications[0]);
         setReviews(revs);
+        setExtracted(ext);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -233,9 +239,189 @@ export default function Review() {
           </div>
         </div>
 
-        {/* ── RIGHT PANEL: AI analysis + review actions ── */}
+        {/* ── RIGHT PANEL: Tabbed — Transcript | Analysis | Review ── */}
         <div className="space-y-5">
 
+          {/* Tab bar */}
+          <div className="flex border-b border-gray-200 bg-white rounded-t-xl overflow-hidden shadow-sm">
+            {([
+              { key: 'transcript' as RightTab, label: 'Transcript View', icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              )},
+              { key: 'analysis' as RightTab, label: 'AI Analysis', icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              )},
+              { key: 'review' as RightTab, label: 'Review & Submit', icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )},
+            ] as { key: RightTab; label: string; icon: React.ReactNode }[]).map(({ key, label, icon }) => (
+              <button
+                key={key}
+                onClick={() => setRightTab(key)}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                  rightTab === key
+                    ? 'border-msbon-600 text-msbon-700 bg-msbon-50/50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {icon}
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ── TAB: TRANSCRIPT VIEW ── */}
+          {rightTab === 'transcript' && (
+            <div className="space-y-4">
+              {!extracted ? (
+                <div className="bg-white rounded-xl border shadow-sm p-8 text-center text-gray-400 text-sm">
+                  Extracted transcript data not available yet — pipeline may still be processing.
+                </div>
+              ) : (
+                <>
+                  {/* Header info */}
+                  <div className="bg-white rounded-xl border shadow-sm p-5">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div>
+                        <h3 className="font-bold text-gray-900 text-base">{extracted.institutions?.[0] || transcript?.schoolName || '—'}</h3>
+                        <p className="text-sm text-gray-500 mt-0.5">{extracted.program_name || transcript?.programType || '—'}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {extracted.graduation_date && (
+                          <span className="bg-green-50 border border-green-200 text-green-800 px-2.5 py-1 rounded-full font-medium">
+                            Graduated {extracted.graduation_date}
+                          </span>
+                        )}
+                        {extracted.graduation_confirmed && (
+                          <span className="bg-blue-50 border border-blue-200 text-blue-800 px-2.5 py-1 rounded-full font-medium">
+                            Degree Conferred
+                          </span>
+                        )}
+                        {extracted.total_credit_hours > 0 && (
+                          <span className="bg-gray-100 border border-gray-200 text-gray-700 px-2.5 py-1 rounded-full font-medium">
+                            {extracted.total_credit_hours} credit hours
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* GPA grid */}
+                    {extracted.gpa_info && Object.keys(extracted.gpa_info).length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        {Object.entries(extracted.gpa_info).map(([key, val]) => (
+                          <div key={key} className="text-center bg-gray-50 rounded-lg px-4 py-2 border">
+                            <div className={`text-xl font-bold ${Number(val) >= 2.0 ? 'text-green-600' : 'text-red-600'}`}>{Number(val).toFixed(2)}</div>
+                            <div className="text-xs text-gray-500 capitalize">{key.replace(/_/g, ' ')} GPA</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Enrollment terms */}
+                  {extracted.enrollment_terms?.length > 0 && (
+                    <div className="bg-white rounded-xl border shadow-sm p-5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Enrollment Terms</p>
+                      <div className="flex flex-wrap gap-2">
+                        {extracted.enrollment_terms.map((term) => (
+                          <span key={term} className="text-xs bg-blue-50 border border-blue-100 text-blue-700 px-2.5 py-1 rounded-full">{term}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Course table */}
+                  {extracted.courses?.length > 0 && (
+                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                      <div className="px-5 py-3 border-b bg-gray-50 flex items-center justify-between">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Course Record</p>
+                        <span className="text-xs text-gray-400">{extracted.courses.length} courses</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-gray-50/50">
+                              <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">Course</th>
+                              <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 hidden sm:table-cell">Number</th>
+                              <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 hidden md:table-cell">Term</th>
+                              <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-500">Credits</th>
+                              <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-500">Grade</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {extracted.courses.map((c, i) => {
+                              const isFailing = ['F', 'D', 'W', 'WF'].includes(c.grade?.toUpperCase());
+                              return (
+                                <tr key={i} className={`hover:bg-gray-50 ${isFailing ? 'bg-red-50/40' : ''}`}>
+                                  <td className="px-4 py-2.5 font-medium text-gray-800 max-w-[180px] truncate" title={c.name}>{c.name}</td>
+                                  <td className="px-4 py-2.5 text-gray-500 hidden sm:table-cell">{c.number}</td>
+                                  <td className="px-4 py-2.5 text-gray-500 hidden md:table-cell">{c.term}</td>
+                                  <td className="px-4 py-2.5 text-center text-gray-700">{c.credits}</td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    <span className={`inline-block font-bold text-xs px-2 py-0.5 rounded-full ${
+                                      isFailing ? 'bg-red-100 text-red-700' :
+                                      ['A', 'A+', 'A-'].includes(c.grade?.toUpperCase()) ? 'bg-green-100 text-green-700' :
+                                      'bg-gray-100 text-gray-700'
+                                    }`}>{c.grade}</span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transfer credits */}
+                  {extracted.transfer_credits?.length > 0 && (
+                    <div className="bg-white rounded-xl border shadow-sm p-5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Transfer Credits</p>
+                      {extracted.transfer_credits.map((tc, i) => (
+                        <div key={i} className="mb-3 last:mb-0">
+                          <p className="text-sm font-medium text-gray-700 mb-1">{tc.institution}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {tc.courses.map((c, j) => (
+                              <span key={j} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                {c.name} ({c.credits} cr, {c.grade})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Source citations from verification */}
+                  {verification?.sourceCitations && verification.sourceCitations.length > 0 && (
+                    <div className="bg-white rounded-xl border shadow-sm p-5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">AI Source Citations</p>
+                      <div className="space-y-2">
+                        {verification.sourceCitations.map((cite, i) => (
+                          <div key={i} className="flex gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                            <svg className="w-3.5 h-3.5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 11h10M7 15h4" />
+                            </svg>
+                            <p className="text-xs text-blue-800 leading-relaxed">{cite}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── TAB: AI ANALYSIS ── */}
+          {rightTab === 'analysis' && (
+            <div className="space-y-4">
           {/* AI Analysis */}
           {verification?.aiAnalysis && (
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -287,6 +473,13 @@ export default function Review() {
               </div>
             </div>
           )}
+
+            </div>
+          )}
+
+          {/* ── TAB: REVIEW & SUBMIT ── */}
+          {rightTab === 'review' && (
+            <div className="space-y-4">
 
           {/* Flagged items — one per card with inline override */}
           {flagged.length > 0 && (
@@ -451,6 +644,9 @@ export default function Review() {
               </div>
             </div>
           )}
+            </div>
+          )}
+
         </div>
       </div>
     </div>

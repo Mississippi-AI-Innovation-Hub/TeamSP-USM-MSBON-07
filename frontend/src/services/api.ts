@@ -1,4 +1,4 @@
-import type { Transcript, Verification, ReviewAction, AuditEntry } from '../types';
+import type { Transcript, Verification, ReviewAction, AuditEntry, ExtractedTranscript } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -20,6 +20,8 @@ export const api = {
     request<{ transcripts: Transcript[] }>('/transcripts').then((r) => r.transcripts),
 
   getTranscript: (id: string) => request<Transcript>(`/transcripts/${id}`),
+
+  getExtractedData: (id: string) => request<ExtractedTranscript>(`/transcripts/${id}/extracted`),
 
   uploadTranscript: async (file: File) => {
     // Step 1: create transcript record and get presigned S3 URL

@@ -5,15 +5,17 @@ import { StatusBadge } from '../components/StatusBadge';
 import type { Transcript } from '../types';
 
 const PROCESSING = new Set(['UPLOADED', 'EXTRACTING', 'VERIFYING', 'REPORTING']);
-const COMPLETE = new Set(['COMPLETE', 'APPROVED', 'REVIEWED']);
+const COMPLETE = new Set(['COMPLETE']);
+const REVIEWED = new Set(['REVIEWED', 'APPROVED']);
 
-type FilterTab = 'all' | 'processing' | 'flagged' | 'complete';
+type FilterTab = 'all' | 'processing' | 'flagged' | 'complete' | 'reviewed';
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'processing', label: 'Processing' },
   { key: 'flagged', label: 'Flagged' },
   { key: 'complete', label: 'Complete' },
+  { key: 'reviewed', label: 'Reviewed' },
 ];
 
 export default function Dashboard() {
@@ -49,6 +51,7 @@ export default function Dashboard() {
       case 'processing': return transcripts.filter((t) => PROCESSING.has(t.status));
       case 'flagged': return transcripts.filter((t) => (t.flagCount ?? 0) > 0 || t.status === 'REVIEW_REQUIRED');
       case 'complete': return transcripts.filter((t) => COMPLETE.has(t.status));
+      case 'reviewed': return transcripts.filter((t) => REVIEWED.has(t.status));
       default: return transcripts;
     }
   }, [transcripts, activeFilter]);
@@ -58,6 +61,7 @@ export default function Dashboard() {
     processing: transcripts.filter((t) => PROCESSING.has(t.status)).length,
     flagged: transcripts.filter((t) => (t.flagCount ?? 0) > 0 || t.status === 'REVIEW_REQUIRED').length,
     complete: transcripts.filter((t) => COMPLETE.has(t.status)).length,
+    reviewed: transcripts.filter((t) => REVIEWED.has(t.status)).length,
   }), [transcripts]);
 
   if (loading) return <div className="text-center py-12 text-gray-500">Loading transcripts...</div>;
@@ -90,7 +94,9 @@ export default function Dashboard() {
             {label}
             {counts[key] > 0 && (
               <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-                key === 'flagged' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                key === 'flagged' ? 'bg-red-100 text-red-700' :
+                key === 'reviewed' ? 'bg-purple-100 text-purple-700' :
+                'bg-gray-100 text-gray-600'
               }`}>
                 {counts[key]}
               </span>
