@@ -198,6 +198,16 @@ class ApiStack(Stack):
             integration=HttpLambdaIntegration("VerifyIntegration", upload_fn, payload_format_version=v1),
         )
         self.api.add_routes(
+            path="/transcripts/{transcriptId}/pdf",
+            methods=[apigwv2.HttpMethod.GET],
+            integration=HttpLambdaIntegration("GetTranscriptPdfIntegration", upload_fn, payload_format_version=v1),
+        )
+        self.api.add_routes(
+            path="/transcripts/{transcriptId}/extracted",
+            methods=[apigwv2.HttpMethod.GET],
+            integration=HttpLambdaIntegration("GetExtractedDataIntegration", upload_fn, payload_format_version=v1),
+        )
+        self.api.add_routes(
             path="/verifications/{transcriptId}",
             methods=[apigwv2.HttpMethod.GET],
             integration=HttpLambdaIntegration("GetVerificationIntegration", verify_fn, payload_format_version=v1),

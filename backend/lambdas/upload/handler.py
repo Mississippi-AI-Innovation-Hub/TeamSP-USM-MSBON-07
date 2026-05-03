@@ -100,6 +100,30 @@ def _handle_get_transcript(transcript_id: str) -> dict:
     return _response(200, item)
 
 
+def _handle_get_transcript_pdf(transcript_id: str) -> dict:
+    """Return a presigned download URL for the transcript PDF."""
+    item = db.get_transcript(transcript_id)
+    if not item:
+        return _response(404, {"error": "Transcript not found"})
+    s3_key = item.get("s3Key")
+    if not s3_key:
+        return _response(404, {"error": "No PDF found for this transcript"})
+    url = s3_utils.generate_presigned_download_url(s3_key, expires=900)
+    return _response(200, {"url": url, "transcriptId": transcript_id})
+
+
+def _handle_get_extracted_data(transcript_id: str) -> dict:
+    """Return extracted transcript JSON from S3."""
+    item = db.get_transcript(transcript_id)
+    if not item:
+        return _response(404, {"error": "Transcript not found"})
+    try:
+        data = s3_utils.get_extracted_data(transcript_id)
+        return _response(200, data)
+    except Exception:
+        return _response(404, {"error": "Extracted data not available yet"})
+
+
 def _handle_verify_transcript(transcript_id: str) -> dict:
     """Trigger verification for an existing transcript."""
     item = db.get_transcript(transcript_id)
@@ -145,8 +169,17 @@ def handler(event, context):
         if http_method == "GET" and path == "/transcripts":
             return _handle_list_transcripts()
 
-        # GET /transcripts/{transcriptId}
         transcript_id = path_params.get("transcriptId")
+
+        # GET /transcripts/{transcriptId}/pdf
+        if http_method == "GET" and transcript_id and path.endswith("/pdf"):
+            return _handle_get_transcript_pdf(transcript_id)
+
+        # GET /transcripts/{transcriptId}/extracted
+        if http_method == "GET" and transcript_id and path.endswith("/extracted"):
+            return _handle_get_extracted_data(transcript_id)
+
+        # GET /transcripts/{transcriptId}
         if http_method == "GET" and transcript_id:
             return _handle_get_transcript(transcript_id)
 
