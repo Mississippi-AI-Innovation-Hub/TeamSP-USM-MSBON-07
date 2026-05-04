@@ -1,6 +1,7 @@
 # Internal dev context (not for public repo)
 CLAUDE.md
 .claude/
+PRESENTATION_BRIEF.md
 
 # Reference documents and test data folder (PDFs, DOCXs, fraud cases — never publish)
 reference files/
