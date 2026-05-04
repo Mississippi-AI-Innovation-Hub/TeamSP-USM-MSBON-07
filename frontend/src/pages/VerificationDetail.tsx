@@ -82,7 +82,9 @@ export default function VerificationDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rerunning, setRerunning] = useState(false);
+  const [resultsReady, setResultsReady] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wasProcessingRef = useRef(false);
 
   const fetchData = (isInitial = false) => {
     if (!id) return;
@@ -92,11 +94,22 @@ export default function VerificationDetail() {
     ])
       .then(([t, verifications]) => {
         setTranscript(t);
-        if (verifications.length > 0) setVerification(verifications[0]);
-        if (!PROCESSING_STATUSES.has(t.status) && pollRef.current) {
+        const isProcessing = PROCESSING_STATUSES.has(t.status);
+        const hasResults = verifications.length > 0;
+        if (hasResults) {
+          setVerification(verifications[verifications.length - 1]);
+        }
+        // Stop polling only when status is done AND we have results
+        if (!isProcessing && hasResults && pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
+          // Flash "results ready" banner if user was watching it process
+          if (wasProcessingRef.current) {
+            setResultsReady(true);
+            setTimeout(() => setResultsReady(false), 4000);
+          }
         }
+        if (isProcessing) wasProcessingRef.current = true;
       })
       .catch((e) => setError(e.message))
       .finally(() => { if (isInitial) setLoading(false); });
@@ -219,6 +232,15 @@ export default function VerificationDetail() {
             <span className="text-lg font-extrabold text-green-600 dark:text-green-400">{passed.length}</span>
             <span className="text-xs font-semibold text-green-700 dark:text-green-400">Passed</span>
           </div>
+        </div>
+      )}
+
+      {resultsReady && (
+        <div className="flex items-center gap-3 px-5 py-3.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl mb-6 animate-pulse">
+          <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span className="text-sm font-semibold text-green-800 dark:text-green-300">Verification complete — results loaded automatically</span>
         </div>
       )}
 
