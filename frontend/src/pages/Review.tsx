@@ -103,11 +103,12 @@ export default function Review() {
     }
   };
 
-  // Build a map of ruleId → newStatus from the latest OVERRIDE review (already submitted)
+  // Committed overrides: from the latest review of any type.
+  // If the latest review is CONFIRM/ANNOTATE (no overrides), active overrides are cleared — this is how "undo" works.
   const committedOverrides = useMemo<Record<string, string>>(() => {
-    const overrideReviews = reviews.filter((r) => r.action === 'OVERRIDE');
-    if (overrideReviews.length === 0) return {};
-    const latest = overrideReviews[overrideReviews.length - 1];
+    if (reviews.length === 0) return {};
+    const latest = reviews[reviews.length - 1];
+    if (latest.action !== 'OVERRIDE' || !latest.overrides?.length) return {};
     return Object.fromEntries(latest.overrides.map((ov) => [ov.ruleId, ov.newStatus]));
   }, [reviews]);
 
@@ -183,14 +184,14 @@ export default function Review() {
         <div className="lg:sticky lg:top-[72px] lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto space-y-4 mb-6 lg:mb-0 pb-4">
 
           {/* Transcript card */}
-          <div className="bg-white rounded-xl border shadow-sm p-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Transcript</p>
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Transcript</p>
             <div className="space-y-2">
               {[
                 { label: 'File', value: transcript?.fileName || '—' },
                 { label: 'School', value: transcript?.schoolName || '—' },
                 { label: 'Program', value: transcript?.programType || '—' },
-                { label: 'Uploaded', value: transcript ? new Date(transcript.uploadDate).toLocaleDateString() : '—' },
+                { label: 'Uploaded', value: transcript ? new Date(transcript.uploadDate).toLocaleDateString('en-US', { timeZone: 'America/Chicago' }) : '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between gap-2 text-sm">
                   <span className="text-gray-500 flex-shrink-0">{label}</span>
@@ -201,8 +202,8 @@ export default function Review() {
           </div>
 
           {/* Risk overview */}
-          <div className="bg-white rounded-xl border shadow-sm p-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Risk Overview</p>
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Risk Overview</p>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-600">Risk Level</span>
               <RiskBadge level={verification?.riskLevel || 'MEDIUM'} />
@@ -225,8 +226,8 @@ export default function Review() {
           </div>
 
           {/* All rule results checklist */}
-          <div className="bg-white rounded-xl border shadow-sm p-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
               {total} Verification Checks
             </p>
             <div className="space-y-1">
@@ -272,7 +273,7 @@ export default function Review() {
         <div className="space-y-5">
 
           {/* Tab bar */}
-          <div className="flex border-b border-gray-200 bg-white rounded-t-xl overflow-hidden shadow-sm">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-t-xl overflow-hidden shadow-sm">
             {([
               { key: 'transcript' as RightTab, label: 'Transcript View', icon: (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -295,8 +296,8 @@ export default function Review() {
                 onClick={() => setRightTab(key)}
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
                   rightTab === key
-                    ? 'border-msbon-600 text-msbon-700 bg-msbon-50/50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    ? 'border-msbon-600 text-msbon-700 dark:text-msbon-400 bg-msbon-50/50 dark:bg-msbon-900/20'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 {icon}
@@ -626,8 +627,8 @@ export default function Review() {
           )}
 
           {/* Reviewer notes */}
-          <div className="bg-white rounded-xl border shadow-sm p-5">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Reviewer Notes
               {Object.keys(overrides).length > 0 && (
                 <span className="ml-2 text-xs font-normal text-amber-600">Required when overriding findings</span>
@@ -643,8 +644,13 @@ export default function Review() {
           </div>
 
           {/* Action buttons */}
-          <div className="bg-white rounded-xl border shadow-sm p-5">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Submit Decision</p>
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Submit Decision</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
+              <strong className="text-gray-600 dark:text-gray-300">Agree with AI:</strong> marks transcript as Reviewed.&nbsp;
+              <strong className="text-gray-600 dark:text-gray-300">Submit Overrides:</strong> records your changes and marks as Reviewed.&nbsp;
+              <strong className="text-gray-600 dark:text-gray-300">Reset:</strong> clears any previous overrides back to the original AI findings.
+            </p>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => submitReview('CONFIRM')}
@@ -654,7 +660,7 @@ export default function Review() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Confirm Findings
+                Agree with AI Findings
               </button>
               {Object.keys(overrides).length > 0 && (
                 <button
@@ -665,26 +671,38 @@ export default function Review() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
-                  Submit with {Object.keys(overrides).length} Override{Object.keys(overrides).length !== 1 ? 's' : ''}
+                  Submit {Object.keys(overrides).length} Override{Object.keys(overrides).length !== 1 ? 's' : ''}
+                </button>
+              )}
+              {Object.keys(committedOverrides).length > 0 && Object.keys(overrides).length === 0 && (
+                <button
+                  onClick={() => submitReview('CONFIRM')}
+                  disabled={submitting}
+                  className="flex items-center justify-center gap-2 px-5 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  Reset to AI Findings
                 </button>
               )}
               <button
                 onClick={() => submitReview('ANNOTATE')}
                 disabled={submitting || !annotations.trim()}
-                className="flex items-center justify-center gap-2 px-5 py-3 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                className="flex items-center justify-center gap-2 px-5 py-3 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
               >
                 Save Notes Only
               </button>
             </div>
-            <p className="mt-3 text-xs text-gray-400">
+            <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
               All submissions are permanently logged in the audit trail with your reviewer ID and timestamp.
             </p>
           </div>
 
           {/* Review history */}
           {reviews.length > 0 && (
-            <div className="bg-white rounded-xl border shadow-sm p-5">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Review History</p>
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
+              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Review History</p>
               <div className="space-y-3">
                 {reviews.map((rev) => (
                   <div key={rev.reviewId} className="flex gap-3">
@@ -699,7 +717,7 @@ export default function Review() {
                           <span className="text-sm font-medium text-gray-900">{rev.reviewerId}</span>
                           <StatusBadge status={rev.action} />
                         </div>
-                        <span className="text-xs text-gray-400">{new Date(rev.timestamp).toLocaleString()}</span>
+                        <span className="text-xs text-gray-400">{new Date(rev.timestamp).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} CST</span>
                       </div>
                       {rev.annotations && <p className="mt-1 text-sm text-gray-600">{rev.annotations}</p>}
                       {rev.overrides.length > 0 && (

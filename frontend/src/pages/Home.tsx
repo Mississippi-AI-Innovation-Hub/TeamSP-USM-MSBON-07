@@ -19,7 +19,7 @@ const ruleCategories = [
       'Graduation date is present on the transcript',
       'Degree is explicitly conferred / awarded',
       'Graduation date is not in the future',
-      'Transcript is officially issued to MSBN / Board of Nursing',
+      'Transcript is officially issued to MSBON / Board of Nursing',
     ],
   },
   {
@@ -45,7 +45,7 @@ const ruleCategories = [
     badgeColor: 'bg-purple-100 text-purple-700',
     dotColor: 'bg-purple-400',
     rules: [
-      'Institution is on the MSBN-approved school list',
+      'Institution is on the MSBON-approved school list',
       'Program type matches an accredited program at that institution',
       'Credential type is valid for nursing licensure (ADN / BSN / MSN / LPN)',
     ],
@@ -198,7 +198,7 @@ export default function Home() {
               </h1>
 
               <p className="text-lg text-blue-100/80 mb-10 max-w-xl leading-relaxed">
-                MSBN staff manually review every nursing transcript submitted for licensure.
+                MSBON staff manually review every nursing transcript submitted for licensure.
                 This system runs <strong className="text-white">18 deterministic checks</strong> and
                 AI holistic analysis in under 90 seconds — so reviewers see a complete,
                 explainable picture before making any decision.
@@ -273,42 +273,39 @@ export default function Home() {
 
         <div className="grid md:grid-cols-3 gap-6">
           {/* Operation Nightingale */}
-          <div className="relative bg-gradient-to-br from-red-600 to-red-800 rounded-2xl p-6 text-white overflow-hidden shadow-lg">
-            <div className="absolute -right-6 -bottom-6 w-36 h-36 bg-white/5 rounded-full" />
-            <div className="absolute -right-3 -bottom-3 w-20 h-20 bg-white/5 rounded-full" />
-            <div className="relative">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <p className="text-xs font-bold uppercase tracking-widest text-red-200 mb-2">Operation Nightingale</p>
-              <p className="text-sm text-red-100 leading-relaxed">
-                A federal investigation uncovered a fraudulent nursing credential scheme that placed unqualified nurses in healthcare settings across the country — making the case for stronger, consistent transcript review.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white border rounded-2xl p-6 shadow-sm">
-            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center mb-4 border border-amber-100">
-              <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-sm">
+            <div className="w-10 h-10 bg-msbon-50 dark:bg-msbon-900/30 rounded-xl flex items-center justify-center mb-4 border border-msbon-100 dark:border-msbon-800">
+              <svg className="w-5 h-5 text-msbon-700 dark:text-msbon-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
             </div>
-            <h3 className="font-bold text-gray-900 mb-2">The Manual Bottleneck</h3>
-            <p className="text-sm text-gray-500 leading-relaxed">
-              MSBN staff manually review every transcript for first-time licensure and endorsement. Reviews are time-consuming, inconsistent across reviewers, and leave little capacity to catch sophisticated fraud.
+            <p className="text-xs font-bold uppercase tracking-widest text-msbon-600 dark:text-msbon-400 mb-2">Operation Nightingale</p>
+            <h3 className="font-bold text-gray-900 dark:text-white mb-2">A Federal Warning</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+              A federal investigation uncovered a fraudulent nursing credential scheme that placed unqualified nurses in healthcare settings across the country — making the case for stronger, consistent transcript review.
             </p>
           </div>
 
-          <div className="bg-white border rounded-2xl p-6 shadow-sm">
-            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center mb-4 border border-green-100">
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-sm">
+            <div className="w-10 h-10 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center mb-4 border border-amber-100 dark:border-amber-800">
+              <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white mb-2">The Manual Bottleneck</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+              MSBON staff manually review every transcript for first-time licensure and endorsement. Reviews are time-consuming, inconsistent across reviewers, and leave little capacity to catch sophisticated fraud.
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 shadow-sm">
+            <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center justify-center mb-4 border border-green-100 dark:border-green-800">
+              <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-            <h3 className="font-bold text-gray-900 mb-2">AI as the Augmentor</h3>
-            <p className="text-sm text-gray-500 leading-relaxed">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-2">AI as the Augmentor</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
               This system standardizes every check, flags anomalies automatically, and explains every finding in plain language — so staff review with confidence. AI augments the reviewer; it never replaces them.
             </p>
           </div>

@@ -114,7 +114,7 @@ export default function AuditLog() {
                         <span className="font-semibold text-sm text-gray-900 dark:text-white">{entry.action}</span>
                       </div>
                       <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
-                        {new Date(timestamp).toLocaleString()}
+                        {new Date(timestamp).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} CST
                       </span>
                     </div>
 

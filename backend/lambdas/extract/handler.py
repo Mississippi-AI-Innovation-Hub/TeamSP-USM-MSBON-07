@@ -301,11 +301,14 @@ def handler(event, context):
         extracted_data_key = s3_utils.save_extracted_data(transcript_id, extracted_data)
         logger.info("Saved extracted data to %s", extracted_data_key)
 
-        # Step 5: Update transcript status in DynamoDB
+        # Step 5: Update transcript status in DynamoDB (also persist school/program so dashboard can display them)
+        institutions = extracted_data.get("institutions") or []
         db.update_transcript_status(
             transcript_id,
             "EXTRACTED",
             extractedDataKey=extracted_data_key,
+            schoolName=institutions[0] if institutions else "",
+            programType=extracted_data.get("program_type") or "",
         )
 
         # Step 6: Log audit entry

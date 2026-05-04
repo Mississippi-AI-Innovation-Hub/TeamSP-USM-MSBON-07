@@ -8,14 +8,13 @@ const PROCESSING = new Set(['UPLOADED', 'EXTRACTING', 'VERIFYING', 'REPORTING'])
 const COMPLETE   = new Set(['COMPLETE']);
 const REVIEWED   = new Set(['REVIEWED', 'APPROVED']);
 
-type FilterTab = 'all' | 'processing' | 'flagged' | 'not_reviewed' | 'complete' | 'reviewed';
+type FilterTab = 'all' | 'processing' | 'flagged' | 'not_reviewed' | 'reviewed';
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'all',          label: 'All' },
   { key: 'processing',   label: 'Processing' },
   { key: 'flagged',      label: 'Flagged' },
   { key: 'not_reviewed', label: 'Not Reviewed' },
-  { key: 'complete',     label: 'Complete' },
   { key: 'reviewed',     label: 'Reviewed' },
 ];
 
@@ -52,7 +51,6 @@ export default function Dashboard() {
       case 'processing':   list = transcripts.filter((t) => PROCESSING.has(t.status)); break;
       case 'flagged':      list = transcripts.filter((t) => (t.flagCount ?? 0) > 0 || t.status === 'REVIEW_REQUIRED'); break;
       case 'not_reviewed': list = transcripts.filter((t) => COMPLETE.has(t.status)); break;
-      case 'complete':     list = transcripts.filter((t) => COMPLETE.has(t.status) || REVIEWED.has(t.status)); break;
       case 'reviewed':     list = transcripts.filter((t) => REVIEWED.has(t.status)); break;
       default:             list = transcripts;
     }
@@ -64,7 +62,6 @@ export default function Dashboard() {
     processing:   transcripts.filter((t) => PROCESSING.has(t.status)).length,
     flagged:      transcripts.filter((t) => (t.flagCount ?? 0) > 0 || t.status === 'REVIEW_REQUIRED').length,
     not_reviewed: transcripts.filter((t) => COMPLETE.has(t.status)).length,
-    complete:     transcripts.filter((t) => COMPLETE.has(t.status) || REVIEWED.has(t.status)).length,
     reviewed:     transcripts.filter((t) => REVIEWED.has(t.status)).length,
   }), [transcripts]);
 
@@ -202,7 +199,7 @@ export default function Dashboard() {
                     </div>
                   </td>
                   <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 hidden lg:table-cell">
-                    {new Date(t.uploadDate).toLocaleDateString()}
+                    {new Date(t.uploadDate).toLocaleDateString('en-US', { timeZone: 'America/Chicago' })}
                   </td>
                   <td className="px-5 py-4 text-right">
                     <Link

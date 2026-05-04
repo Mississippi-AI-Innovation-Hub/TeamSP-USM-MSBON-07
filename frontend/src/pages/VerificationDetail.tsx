@@ -205,7 +205,7 @@ export default function VerificationDetail() {
         {[
           { label: 'School', value: transcript.schoolName || '—' },
           { label: 'Program', value: transcript.programType || '—' },
-          { label: 'Uploaded', value: new Date(transcript.uploadDate).toLocaleDateString() },
+          { label: 'Uploaded', value: new Date(transcript.uploadDate).toLocaleDateString('en-US', { timeZone: 'America/Chicago' }) },
           { label: 'Status', value: transcript.status },
         ].map(({ label, value }) => (
           <div key={label} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm">
