@@ -14,7 +14,7 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'all',          label: 'All' },
   { key: 'processing',   label: 'Processing' },
   { key: 'flagged',      label: 'Flagged' },
-  { key: 'not_reviewed', label: 'Not Reviewed' },
+  { key: 'not_reviewed', label: 'Pending Review' },
   { key: 'reviewed',     label: 'Reviewed' },
 ];
 
