@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { StatusBadge, RiskBadge } from '../components/StatusBadge';
@@ -88,7 +88,12 @@ export default function Review() {
       });
       await api.createReview({ transcriptId: id, reviewerId: 'staff-user', action, overrides: overrideList, annotations });
       setSuccess(`Review submitted: ${action}`);
-      const revs = await api.getReviews(id);
+      // Re-fetch transcript (status updates to REVIEWED) and reviews in parallel
+      const [updatedTranscript, revs] = await Promise.all([
+        api.getTranscript(id),
+        api.getReviews(id),
+      ]);
+      setTranscript(updatedTranscript);
       setReviews(revs);
       setOverrides({});
     } catch (e) {
@@ -97,6 +102,14 @@ export default function Review() {
       setSubmitting(false);
     }
   };
+
+  // Build a map of ruleId → newStatus from the latest OVERRIDE review (already submitted)
+  const committedOverrides = useMemo<Record<string, string>>(() => {
+    const overrideReviews = reviews.filter((r) => r.action === 'OVERRIDE');
+    if (overrideReviews.length === 0) return {};
+    const latest = overrideReviews[overrideReviews.length - 1];
+    return Object.fromEntries(latest.overrides.map((ov) => [ov.ruleId, ov.newStatus]));
+  }, [reviews]);
 
   if (loading) {
     return (
@@ -109,11 +122,19 @@ export default function Review() {
     );
   }
 
-  const flagged = verification?.ruleResults.filter((r: RuleResult) => r.status === 'FLAG') || [];
-  const passed = verification?.ruleResults.filter((r: RuleResult) => r.status === 'PASS') || [];
-  const undetermined = verification?.ruleResults.filter((r: RuleResult) => r.status === 'UNABLE_TO_DETERMINE') || [];
-  const total = verification?.ruleResults.length || 0;
-  const activeRuleData = activeRule ? verification?.ruleResults.find((r) => r.ruleId === activeRule) : null;
+  // Effective rule results: committed overrides > pending local overrides > original AI status
+  const effectiveResults: RuleResult[] = useMemo(() => (
+    verification?.ruleResults.map((r) => ({
+      ...r,
+      status: (committedOverrides[r.ruleId] ?? overrides[r.ruleId] ?? r.status) as RuleResult['status'],
+    })) ?? []
+  ), [verification, committedOverrides, overrides]);
+
+  const flagged       = effectiveResults.filter((r) => r.status === 'FLAG');
+  const passed        = effectiveResults.filter((r) => r.status === 'PASS');
+  const undetermined  = effectiveResults.filter((r) => r.status === 'UNABLE_TO_DETERMINE');
+  const total = effectiveResults.length;
+  const activeRuleData = activeRule ? effectiveResults.find((r) => r.ruleId === activeRule) : null;
 
   return (
     <div>
@@ -208,21 +229,25 @@ export default function Review() {
               {total} Verification Checks
             </p>
             <div className="space-y-1">
-              {verification?.ruleResults.map((r) => (
-                <button
-                  key={r.ruleId}
-                  onClick={() => setActiveRule(activeRule === r.ruleId ? null : r.ruleId)}
-                  className={`w-full flex items-start gap-2 px-2 py-1.5 rounded-lg text-left transition-colors text-xs hover:bg-gray-50 ${activeRule === r.ruleId ? 'bg-msbon-50 ring-1 ring-msbon-200' : ''}`}
-                >
-                  <RuleStatusDot status={overrides[r.ruleId] || r.status} />
-                  <span className={`flex-1 leading-tight ${r.status === 'FLAG' ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
-                    {formatRuleId(r.ruleId)}
-                  </span>
-                  {overrides[r.ruleId] && overrides[r.ruleId] !== r.status && (
-                    <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">overridden</span>
-                  )}
-                </button>
-              ))}
+              {effectiveResults.map((r) => {
+                const originalStatus = verification?.ruleResults.find((orig) => orig.ruleId === r.ruleId)?.status;
+                const isOverridden = r.status !== originalStatus;
+                return (
+                  <button
+                    key={r.ruleId}
+                    onClick={() => setActiveRule(activeRule === r.ruleId ? null : r.ruleId)}
+                    className={`w-full flex items-start gap-2 px-2 py-1.5 rounded-lg text-left transition-colors text-xs hover:bg-gray-50 ${activeRule === r.ruleId ? 'bg-msbon-50 ring-1 ring-msbon-200' : ''}`}
+                  >
+                    <RuleStatusDot status={r.status} />
+                    <span className={`flex-1 leading-tight ${r.status === 'FLAG' ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
+                      {formatRuleId(r.ruleId)}
+                    </span>
+                    {isOverridden && (
+                      <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">overridden</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Expanded rule detail */}
