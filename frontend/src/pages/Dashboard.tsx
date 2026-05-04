@@ -47,14 +47,16 @@ export default function Dashboard() {
   }, []);
 
   const filtered = useMemo(() => {
+    let list: typeof transcripts;
     switch (activeFilter) {
-      case 'processing': return transcripts.filter((t) => PROCESSING.has(t.status));
-      case 'flagged':    return transcripts.filter((t) => (t.flagCount ?? 0) > 0 || t.status === 'REVIEW_REQUIRED');
-      case 'not_reviewed': return transcripts.filter((t) => COMPLETE.has(t.status));
-      case 'complete':     return transcripts.filter((t) => COMPLETE.has(t.status) || REVIEWED.has(t.status));
-      case 'reviewed':     return transcripts.filter((t) => REVIEWED.has(t.status));
-      default:           return transcripts;
+      case 'processing':   list = transcripts.filter((t) => PROCESSING.has(t.status)); break;
+      case 'flagged':      list = transcripts.filter((t) => (t.flagCount ?? 0) > 0 || t.status === 'REVIEW_REQUIRED'); break;
+      case 'not_reviewed': list = transcripts.filter((t) => COMPLETE.has(t.status)); break;
+      case 'complete':     list = transcripts.filter((t) => COMPLETE.has(t.status) || REVIEWED.has(t.status)); break;
+      case 'reviewed':     list = transcripts.filter((t) => REVIEWED.has(t.status)); break;
+      default:             list = transcripts;
     }
+    return [...list].sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
   }, [transcripts, activeFilter]);
 
   const counts = useMemo(() => ({
