@@ -171,7 +171,3 @@ This repository contains code and supporting materials developed as part of a Mi
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
-## Contributors
-
-Developed by the Mississippi AI Innovation Hub in partnership with the Mississippi State Board of Nursing (MSBN), Mississippi ITS, and MAIN.
