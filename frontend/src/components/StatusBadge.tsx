@@ -3,27 +3,27 @@ import type { TranscriptStatus } from '../types';
 const PROCESSING = new Set(['UPLOADED', 'EXTRACTING', 'VERIFYING', 'REPORTING']);
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  UPLOADED: { label: 'Uploaded', color: 'bg-gray-100 text-gray-700' },
-  EXTRACTING: { label: 'Extracting…', color: 'bg-blue-100 text-blue-700' },
-  EXTRACTED: { label: 'Extracted', color: 'bg-blue-100 text-blue-700' },
-  VERIFYING: { label: 'Verifying…', color: 'bg-yellow-100 text-yellow-700' },
-  REPORTING: { label: 'Generating Report…', color: 'bg-yellow-100 text-yellow-700' },
-  VERIFIED: { label: 'Verified', color: 'bg-green-100 text-green-700' },
-  COMPLETE: { label: 'Complete', color: 'bg-green-100 text-green-800' },
-  REVIEW_REQUIRED: { label: 'Review Required', color: 'bg-red-100 text-red-700' },
-  REVIEWED: { label: 'Reviewed', color: 'bg-purple-100 text-purple-700' },
-  APPROVED: { label: 'Approved', color: 'bg-green-100 text-green-800' },
-  NEEDS_FOLLOW_UP: { label: 'Needs Follow-Up', color: 'bg-orange-100 text-orange-700' },
-  CLEAR: { label: 'Clear', color: 'bg-green-100 text-green-700' },
-  FLAGS_FOUND: { label: 'Flags Found', color: 'bg-red-100 text-red-700' },
-  EXTRACTION_FAILED: { label: 'Extraction Failed', color: 'bg-red-100 text-red-700' },
-  VERIFICATION_FAILED: { label: 'Verification Failed', color: 'bg-red-100 text-red-700' },
+  UPLOADED:            { label: 'Uploaded',          color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300' },
+  EXTRACTING:          { label: 'Extracting…',        color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' },
+  EXTRACTED:           { label: 'Extracted',          color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' },
+  VERIFYING:           { label: 'Verifying…',         color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' },
+  REPORTING:           { label: 'Generating Report…', color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' },
+  VERIFIED:            { label: 'Verified',           color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  COMPLETE:            { label: 'Pending Review',     color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
+  REVIEW_REQUIRED:     { label: 'Review Required',    color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
+  REVIEWED:            { label: 'Reviewed',           color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' },
+  APPROVED:            { label: 'Approved',           color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  NEEDS_FOLLOW_UP:     { label: 'Needs Follow-Up',   color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' },
+  CLEAR:               { label: 'Clear',              color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  FLAGS_FOUND:         { label: 'Flags Found',        color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
+  EXTRACTION_FAILED:   { label: 'Extraction Failed',  color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
+  VERIFICATION_FAILED: { label: 'Verification Failed',color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
 };
 
 const riskConfig: Record<string, { color: string }> = {
-  LOW: { color: 'bg-green-100 text-green-700' },
-  MEDIUM: { color: 'bg-yellow-100 text-yellow-700' },
-  HIGH: { color: 'bg-red-100 text-red-700' },
+  LOW:    { color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  MEDIUM: { color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' },
+  HIGH:   { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
 };
 
 export function StatusBadge({ status }: { status: TranscriptStatus | string }) {
