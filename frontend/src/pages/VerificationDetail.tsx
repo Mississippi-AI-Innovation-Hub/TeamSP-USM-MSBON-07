@@ -358,7 +358,8 @@ export default function VerificationDetail() {
         <ProcessingIndicator status={transcript.status} />
       ) : (
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center">
-          <p className="text-gray-500 dark:text-gray-400">No verification results yet.</p>
+          <div className="w-10 h-10 border-4 border-msbon-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Loading analysis results…</p>
         </div>
       )}
     </div>
