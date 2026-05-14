@@ -34,6 +34,8 @@ This PoC covers:
 
 ## Architecture Overview
 
+![Architecture Overview](docs/images/architecture-overview.svg)
+
 ```
 ┌─────────────────────────────────┐
 │   React SPA (S3 + CloudFront)   │
