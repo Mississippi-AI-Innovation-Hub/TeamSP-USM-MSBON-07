@@ -34,7 +34,7 @@ This PoC covers:
 
 ## Architecture Overview
 
-![Architecture Overview](docs/images/architecture-overview.svg)
+![Architecture Overview](docs/images/architecture-overview.png)
 
 ```
 ┌─────────────────────────────────┐

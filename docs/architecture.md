@@ -6,7 +6,7 @@ The MSBON Transcript Verification system is a serverless AWS application built w
 
 ## System Diagram
 
-![Architecture Overview](images/architecture-overview.svg)
+![Architecture Overview](images/architecture-overview.png)
 
 ```
 ┌─────────────────────────────────┐
